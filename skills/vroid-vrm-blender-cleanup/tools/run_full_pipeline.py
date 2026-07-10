@@ -1,5 +1,5 @@
 """
-Full VRoid avatar pipeline orchestrator (phases A–J).
+Full VRoid avatar pipeline orchestrator (phases A–K).
 Run via MCP execute_blender_code or Blender Scripting workspace.
 
     result = run_full_pipeline(body_type="female", dry_run=True)
@@ -15,7 +15,7 @@ from typing import Any, Dict, Optional, Set
 import bpy
 
 DRY_RUN = True
-DEFAULT_PHASES = frozenset({"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"})
+DEFAULT_PHASES = frozenset({"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"})
 
 _NS: Dict[str, Any] = {}
 _LOADED = False
@@ -56,6 +56,7 @@ def _skill_paths() -> dict:
         "shapekey": pick("vroid-shapekey-remap", "tools"),
         "bone": pick("blender-bone-remap", "tools"),
         "mtoon": pick("mtoon-material-sync", "tools"),
+        "bone_collections": pick("blender-bone-collections", "tools"),
     }
 
 
@@ -77,44 +78,50 @@ def _merge_exports(namespace: Dict[str, Any], names: Optional[Set[str]] = None) 
 
 def _load_tools() -> None:
     global _LOADED
-    if _LOADED:
-        return
     paths = _skill_paths()
-    local = [
-        "import_vrm.py",
-        "vrm_bones_rename.py",
-        "clean_vroid_material_names.py",
-        "rename_mtoon_textures.py",
-        "check_beyond_expressions.py",
-        "transfer_arkit_shapekeys.py",
-        "reset_shape_keys.py",
-        "clean_mesh_datablocks.py",
-    ]
-    for name in local:
-        script = os.path.join(paths["cleanup"], name)
-        if not os.path.isfile(script):
-            raise FileNotFoundError(f"Pipeline script not found: {script}")
-        _merge_exports(_exec_script(script))
+    if not _LOADED:
+        local = [
+            "import_vrm.py",
+            "vrm_bones_rename.py",
+            "clean_vroid_material_names.py",
+            "rename_mtoon_textures.py",
+            "check_beyond_expressions.py",
+            "transfer_arkit_shapekeys.py",
+            "reset_shape_keys.py",
+            "clean_mesh_datablocks.py",
+        ]
+        for name in local:
+            script = os.path.join(paths["cleanup"], name)
+            if not os.path.isfile(script):
+                raise FileNotFoundError(f"Pipeline script not found: {script}")
+            _merge_exports(_exec_script(script))
 
-    bone_script = os.path.join(paths["bone"], "remap_bones.py")
-    collider_script = os.path.join(paths["bone"], "rename_vrm_colliders.py")
-    shapekey_script = os.path.join(paths["shapekey"], "remap_shapekeys.py")
-    for script in (bone_script, collider_script, shapekey_script):
-        if not os.path.isfile(script):
-            raise FileNotFoundError(f"Pipeline script not found: {script}")
+        bone_script = os.path.join(paths["bone"], "remap_bones.py")
+        collider_script = os.path.join(paths["bone"], "rename_vrm_colliders.py")
+        shapekey_script = os.path.join(paths["shapekey"], "remap_shapekeys.py")
+        for script in (bone_script, collider_script, shapekey_script):
+            if not os.path.isfile(script):
+                raise FileNotFoundError(f"Pipeline script not found: {script}")
 
-    _merge_exports(_exec_script(bone_script))
-    _merge_exports(_exec_script(collider_script))
-    # Shapekey module shares dry_run_mapping / apply_mapping names with bones — export entrypoint only.
-    _merge_exports(_exec_script(shapekey_script), {"remap_object_fcl_keys"})
+        _merge_exports(_exec_script(bone_script))
+        _merge_exports(_exec_script(collider_script))
+        # Shapekey module shares dry_run_mapping / apply_mapping names with bones — export entrypoint only.
+        _merge_exports(_exec_script(shapekey_script), {"remap_object_fcl_keys"})
+        _LOADED = True
 
     mtoon_script = os.path.join(paths["mtoon"], "sync_mtoon_attributes.py")
-    if os.path.isfile(mtoon_script):
+    if os.path.isfile(mtoon_script) and "run_phase_j" not in _NS:
         _merge_exports(
             _exec_script(mtoon_script),
             {"audit_mtoon_sync", "apply_mtoon_sync", "run_phase_j"},
         )
-    _LOADED = True
+
+    bc_script = os.path.join(paths["bone_collections"], "assign_bone_collections.py")
+    if os.path.isfile(bc_script) and "run_phase_k" not in _NS:
+        _merge_exports(
+            _exec_script(bc_script),
+            {"audit_bone_collections", "apply_bone_collections", "run_phase_k"},
+        )
 
 
 def _fn(name: str):
@@ -370,6 +377,18 @@ def run_full_pipeline(
                         "mirror_count": len(mirror),
                     }
 
+    # --- K: bone collections (Hair / Body / Clothing) ---
+    if "K" in chosen:
+        _load_tools()
+        if "run_phase_k" not in _NS:
+            results["phases"]["K"] = _skip_result("K", "bone_collections_script_not_found")
+        else:
+            k_result = _NS["run_phase_k"](
+                armature_object_name=armature_object_name,
+                dry_run=dry_run,
+            )
+            results["phases"]["K"] = k_result
+
     # --- H: colliders ---
     if "H" in chosen:
         audit_vrm_colliders = _fn("audit_vrm_colliders")
@@ -436,6 +455,16 @@ def _pipeline_summary(
     except Exception:
         pass
 
+    bone_collection_unassigned = 0
+    bone_collection_mismatches = 0
+    try:
+        if "audit_bone_collections" in _NS:
+            bc_audit = _NS["audit_bone_collections"](armature_object_name=armature_object_name)
+            bone_collection_unassigned = bc_audit.get("unassigned_bone_count", 0)
+            bone_collection_mismatches = len(bc_audit.get("mismatches", []))
+    except Exception:
+        pass
+
     return {
         "fcl_shape_keys_remaining": fcl_left,
         "n00_materials_remaining": n00_mats,
@@ -443,6 +472,8 @@ def _pipeline_summary(
         "merged_baked_mesh_data_remaining": merged_meshes,
         "legacy_texture_names_remaining": legacy_textures,
         "mtoon_materials_needing_sync": mtoon_materials_needing_sync,
+        "bone_collection_unassigned": bone_collection_unassigned,
+        "bone_collection_mismatches": bone_collection_mismatches,
     }
 
 

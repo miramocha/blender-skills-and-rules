@@ -1,6 +1,6 @@
 # VRoid VRM Blender cleanup — examples
 
-## Full pipeline — IDOG DIGI session (A–J)
+## Full pipeline — IDOG DIGI session (A–K)
 
 Avatar already open in Blender (`Armature`, `Face`). User declared **female** for ARKit.
 
@@ -185,9 +185,21 @@ result = remap_object_fcl_keys("Face", fix_vrm_expression_binds=True)
 | `Fcl_BRW_Angry` | `vroidBrowAngry` |
 | `Fcl_EYE_Close_L` | `vroidEyeCloseL` |
 
-## Phase G + H — Bones and colliders
+## Phase G + K + H — Bones, collections, and colliders
 
-See **blender-bone-remap** examples. Orchestrator runs G then H automatically.
+Orchestrator runs **G → K → H** automatically. Phase K assigns Hair / Body / Clothing bone collections after remap.
+
+```python
+BC_TOOLS = os.path.join(
+    os.path.expanduser("~"), ".cursor", "skills", "blender-bone-collections", "tools"
+)
+exec(open(os.path.join(BC_TOOLS, "assign_bone_collections.py")).read())
+audit = audit_bone_collections(armature_object_name="Armature")
+result = apply_bone_collections(armature_object_name="Armature", dry_run=False)
+# result["assigned"] -> {"Hair": 61, "Body": 61, "Clothing": 0}
+```
+
+See **blender-bone-remap** and **blender-bone-collections** examples for details.
 
 ## Phase I — Mesh datablock cleanup
 

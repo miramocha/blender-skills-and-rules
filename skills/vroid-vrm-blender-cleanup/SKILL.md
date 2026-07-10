@@ -1,17 +1,17 @@
 ---
 name: vroid-vrm-blender-cleanup
 description: >-
-  Full VRoid/VRM avatar pipeline in Blender (phases A–J): VRM humanoid bone rename,
+  Full VRoid/VRM avatar pipeline in Blender (phases A–K): VRM humanoid bone rename,
   material and MToon texture cleanup, MToon rim/shading sync, optional ARKit shape keys, Fcl shape key remap,
-  custom bone remap, collider rename, mesh datablock cleanup. Orchestrated via
+  custom bone remap, bone collections (Hair/Body/Clothing), collider rename, mesh datablock cleanup. Orchestrated via
   run_full_pipeline() with dry-run gates; individual phase scripts still available.
 ---
 
-# VRoid VRM Blender cleanup (full pipeline A–J)
+# VRoid VRM Blender cleanup (full pipeline A–K)
 
 ## When to use
 
-- **Full pipeline:** one invocation runs **A → B → C → (B rescan) → D → E → (B + C cleanup rescan) → J → F → G → H → I**
+- **Full pipeline:** one invocation runs **A → B → C → (B rescan) → D → E → (B + C cleanup rescan) → J → F → G → K → H → I**
 - **Import** optional when a `.blend` is already open
 - **Partial runs:** single phases via `run_phase_a()` … `run_phase_i()` or `phases={...}` on the orchestrator
 - Cleaning VRoid-exported materials, textures, bones, shape keys, colliders, mesh data names
@@ -22,6 +22,7 @@ Related skills (invoked by orchestrator or manually):
 
 - **vroid-shapekey-remap** — umbrella **Phase F** (`Fcl_*` → `vroid*`)
 - **blender-bone-remap** — umbrella **Phase G** (bones) + **Phase H** (colliders)
+- **blender-bone-collections** — umbrella **Phase K** (Hair / Body / Clothing bone collections)
 - **mtoon-material-sync** — umbrella **Phase J** (rim + shading parametric sync)
 
 ## Full pipeline (primary entry)
@@ -82,19 +83,20 @@ flowchart TD
   pJ[Phase J: MToon rim + shading sync]
   pF[Phase F: Fcl to vroid + VRM expr]
   pG[Phase G: Custom bone remap]
+  pK[Phase K: Bone collections]
   pH[Phase H: Collider Empty + metadata]
   pI[Phase I: Mesh datablock names]
   done[Summary + save reminder]
 
-  start --> optImport --> pA --> pB --> pC --> pB2 --> pD --> pE --> pB3 --> pC2 --> pJ --> pF --> pG --> pH --> pI --> done
+  start --> optImport --> pA --> pB --> pC --> pB2 --> pD --> pE --> pB3 --> pC2 --> pJ --> pF --> pG --> pK --> pH --> pI --> done
 ```
 
 ### Agent rules
 
-- Full order: **A → B → C → (B rescan) → D → E → (B rescan + C ARKit texture cleanup) → J → F → G → H → I**
+- Full order: **A → B → C → (B rescan) → D → E → (B rescan + C ARKit texture cleanup) → J → F → G → K → H → I**
 - **Never skip Phase A** in full pipeline; reject `phases` sets omitting `"A"`
 - **Never guess `body_type`** — required for D/E (`male` | `female`)
-- If no `body_type`: run **A→B→C→J→F→G→H→I**, skip D/E with reason
+- If no `body_type`: run **A→B→C→J→F→G→K→H→I**, skip D/E with reason
 - Every destructive step: **dry-run → stop for approval → apply → verify**
 - Remind user to **save .blend** after Phase C (disk textures) and at end
 
@@ -116,7 +118,7 @@ flowchart TD
 - [ ] phase-i-mesh — Clean (merged) / .baked mesh datablock names
 ```
 
-## Phase map (A–J)
+## Phase map (A–K)
 
 | Phase | Required? | Script | What |
 |-------|-----------|--------|------|
@@ -277,6 +279,21 @@ exec(open(os.path.join(BONE_TOOLS, "remap_bones.py")).read())
 
 See **blender-bone-remap** skill for full mapping rules.
 
+### Phase K — bone collections (Hair / Body / Clothing)
+
+Runs **after Phase G** so remapped `hair*` / `hood*` names classify correctly.
+
+```python
+BC_TOOLS = os.path.join(
+    os.path.expanduser("~"), ".cursor", "skills", "blender-bone-collections", "tools"
+)
+exec(open(os.path.join(BC_TOOLS, "assign_bone_collections.py")).read())
+audit = audit_bone_collections(armature_object_name=armature_object_name)
+result = apply_bone_collections(armature_object_name=armature_object_name, dry_run=False)
+```
+
+See **blender-bone-collections** skill for classification rules.
+
 ### Phase H — collider rename
 
 ```python
@@ -338,6 +355,7 @@ Skip this follow-up if D already ran in the same session.
 | Phase E skipped | Phase D was not applied |
 | Phase G blocked | Run Phase A first — `J_Bip_*` bones still present |
 | Phase J skipped | `mtoon-material-sync` skill not installed / script missing |
+| Phase K skipped | `blender-bone-collections` skill not installed / script missing |
 | Multiple `.vrm` in folder | AskQuestion; pass `filename=` to import |
 
 ## Out of scope unless asked
@@ -350,7 +368,7 @@ Skip this follow-up if D already ran in the same session.
 
 | Tool | Entrypoints |
 |------|-------------|
-| [run_full_pipeline.py](tools/run_full_pipeline.py) | `run_full_pipeline()` — orchestrates A–J |
+| [run_full_pipeline.py](tools/run_full_pipeline.py) | `run_full_pipeline()` — orchestrates A–K |
 | [import_vrm.py](tools/import_vrm.py) | `list_vrm_files()`, `run_phase_import()`, `audit_after_import()` |
 | [vrm_bones_rename.py](tools/vrm_bones_rename.py) | `run_phase_a()` — Phase **A** |
 | [clean_vroid_material_names.py](tools/clean_vroid_material_names.py) | `run_phase_b()` — Phase **B** |
