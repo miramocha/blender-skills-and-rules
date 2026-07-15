@@ -10,8 +10,9 @@ description: >-
 
 ## When to use
 
-- VRoid face/body mesh still has tris but **same UV layout** as a reference quad conversion
+- VRoid **face**, **mouth**, **body** meshes with tris but **same UV layout** as a reference quad conversion
 - Portable replay via CSV (`u1,v1,u2,v2` dissolve edges) — not `tris_convert_to_quads`
+- **Hair** → use [hair-tris-to-quad](../hair-tris-to-quad/SKILL.md) instead (UV varies per hairstyle)
 
 ## Profiles
 

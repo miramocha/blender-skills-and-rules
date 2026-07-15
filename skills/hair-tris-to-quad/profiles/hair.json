@@ -1,0 +1,13 @@
+{
+  "profile": "hair",
+  "label": "VRoid hair — stock tris_convert_to_quads",
+  "method": "tris_convert_to_quads",
+  "face_angle_deg": 90,
+  "shape_angle_deg": 90,
+  "vertex_groups": {
+    "cap": "Hair.Cap",
+    "strip": "Hair.Strip"
+  },
+  "assign_vertex_groups": true,
+  "notes": "Assigns Hair.Cap / Hair.Strip from UV cap pairs before convert. Full Hair mesh — not tri-to-quad-uv-map CSV."
+}
