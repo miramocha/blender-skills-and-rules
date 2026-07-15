@@ -1,11 +1,12 @@
 {
   "profile": "face",
-  "label": "VRoid face mesh (UVMap)",
+  "label": "VRoid face skin UV (UVMap)",
   "uv_layer": "UVMap",
   "uv_precision": 4,
   "co_precision": 6,
   "map_file": "maps/face-quad-dissolve.csv",
-  "notes": "Reference pair from Face.only → Face.only.quad. Apply to tri face meshes on new VRM imports with same VRoid face UV.",
+  "material_token": "Face.Skin",
+  "notes": "Skin-only face UV (Face.Skin slot). Resolves import or workflow material names via Phase B. Skips if map CSV missing or empty.",
   "reference": {
     "source_object": "Face.only",
     "result_object": "Face.only.quad"

@@ -3,17 +3,18 @@
 Portable across mesh imports that share the same UV layout (VRoid face, body, etc.).
 Uses dissolve on matched UV edge pairs — not tris_convert_to_quads.
 
-When extracting a mesh by material slot, resolve the slot with
-`resolve_material_by_token()` from vroid-vrm-blender-cleanup Phase B
-(import name and cleaned name both work; see `.cursor/rules/vroid-material-names.mdc`).
-
-CSV is the default map format (~16× smaller than pretty JSON with quad_uv).
+When extracting a mesh by material slot, profiles may set `material_token` (e.g. Face.Skin).
+`apply_profile` resolves it via Phase B `resolve_material_by_token()` and only dissolves
+edges on that material slot. Returns `{skipped: True, reason: ...}` when the map CSV is
+missing/empty or the material is not on the target object.
 
 MCP / Scripting:
   import tri_to_quad_uv_map as tq
   tq.export_reference("face", src_obj="Face.only", dst_obj="Face.only.quad")
-  tq.apply_profile("face", target_obj="Face.Tris", dry_run=True)
-  tq.apply_profile("face", target_obj="Face.Tris", dry_run=False)
+  result = tq.apply_profile("face", target_obj="Face", dry_run=True)
+  if result.get("skipped"):
+      print(result["reason"])
+  tq.apply_profile("face", target_obj="Face", dry_run=False)
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ import csv
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Optional, Set
 
 import bmesh
 
@@ -34,6 +35,7 @@ except ImportError:  # pragma: no cover
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 PROFILES_DIR = SKILL_ROOT / "profiles"
 MAPS_DIR = SKILL_ROOT / "maps"
+CLEANUP_TOOLS = SKILL_ROOT.parent / "vroid-vrm-blender-cleanup" / "tools"
 
 DEFAULT_UV_PREC = 4
 DEFAULT_CO_PREC = 6
@@ -51,6 +53,7 @@ class Profile:
     co_precision: int = DEFAULT_CO_PREC
     map_file: str = ""
     notes: str = ""
+    material_token: str = ""
     reference: dict[str, str] = field(default_factory=dict)
 
     @property
@@ -75,8 +78,138 @@ class Profile:
             co_precision=int(data.get("co_precision", DEFAULT_CO_PREC)),
             map_file=data.get("map_file", ""),
             notes=data.get("notes", ""),
+            material_token=data.get("material_token", ""),
             reference=data.get("reference", {}),
         )
+
+
+_resolve_material_fn: Optional[Callable[..., Any]] = None
+
+
+def _resolve_material_by_token(token: str) -> Any:
+    """Delegate to vroid-vrm-blender-cleanup Phase B material resolver."""
+    global _resolve_material_fn
+    if _resolve_material_fn is None:
+        import importlib.util
+
+        path = CLEANUP_TOOLS / "clean_vroid_material_names.py"
+        if not path.is_file():
+            raise FileNotFoundError(f"Phase B material tools not found: {path}")
+        spec = importlib.util.spec_from_file_location("clean_vroid_material_names", path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot load {path}")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _resolve_material_fn = mod.resolve_material_by_token
+    return _resolve_material_fn(token)
+
+
+def material_slot_indices(obj: Any, material: Any) -> Set[int]:
+    """Slot indices on mesh object that use this material datablock."""
+    if material is None or obj.type != "MESH":
+        return set()
+    return {i for i, slot in enumerate(obj.material_slots) if slot.material == material}
+
+
+def audit_material_on_object(
+    obj_name: str,
+    material_token: str,
+) -> dict[str, Any]:
+    """Check map token resolves and which slots on the object use it."""
+    obj = bpy.data.objects.get(obj_name)
+    if not obj or obj.type != "MESH":
+        return {
+            "object": obj_name,
+            "material_token": material_token,
+            "found": False,
+            "error": "mesh_object_not_found",
+        }
+    mat = _resolve_material_by_token(material_token)
+    if mat is None:
+        return {
+            "object": obj_name,
+            "material_token": material_token,
+            "found": False,
+            "error": "material_not_found",
+        }
+    slots = sorted(material_slot_indices(obj, mat))
+    face_count = sum(1 for p in obj.data.polygons if p.material_index in slots) if slots else 0
+    return {
+        "object": obj_name,
+        "material_token": material_token,
+        "material_name": mat.name,
+        "found": bool(slots),
+        "slot_indices": slots,
+        "face_count": face_count,
+    }
+
+
+def audit_profile_ready(
+    profile_name: str,
+    target_obj: str,
+    *,
+    profiles_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Dry readiness check: profile, map file, optional material on object."""
+    try:
+        prof = Profile.load(profile_name, profiles_dir)
+    except FileNotFoundError as exc:
+        return {"ready": False, "reason": "profile_not_found", "error": str(exc)}
+
+    path = prof.map_path
+    if not path.is_file():
+        return {
+            "ready": False,
+            "reason": "map_not_found",
+            "profile": profile_name,
+            "object": target_obj,
+            "map": str(path),
+        }
+
+    data = load_map(path)
+    targets = _iter_target_edges(data)
+    if not targets:
+        return {
+            "ready": False,
+            "reason": "empty_map",
+            "profile": profile_name,
+            "object": target_obj,
+            "map": str(path),
+        }
+
+    out: dict[str, Any] = {
+        "ready": True,
+        "profile": profile_name,
+        "object": target_obj,
+        "map": str(path),
+        "join_count": len(targets),
+    }
+    if prof.material_token:
+        out["material"] = audit_material_on_object(target_obj, prof.material_token)
+        if not out["material"].get("found"):
+            out["ready"] = False
+            out["reason"] = out["material"].get("error", "material_not_ready")
+    return out
+
+
+def _skip_result(
+    *,
+    reason: str,
+    profile: str = "",
+    target_obj: str = "",
+    map_path: str = "",
+    material_token: str = "",
+    **extra: Any,
+) -> dict[str, Any]:
+    return {
+        "skipped": True,
+        "reason": reason,
+        "profile": profile,
+        "object": target_obj,
+        "map": map_path,
+        "material_token": material_token,
+        **extra,
+    }
 
 
 def _uv_key(uv, prec: int) -> tuple[float, float]:
@@ -343,10 +476,28 @@ def apply_map(
     map_path: str | Path,
     *,
     uv_layer: str | None = None,
+    material_slot_indices: Set[int] | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Dissolve UV-matched internal edges on target mesh."""
-    data = load_map(map_path)
+    path = Path(map_path)
+    if not path.is_file():
+        return _skip_result(
+            reason="map_not_found",
+            target_obj=obj_name,
+            map_path=str(path),
+        )
+
+    data = load_map(path)
+    targets = _iter_target_edges(data)
+    if not targets:
+        return _skip_result(
+            reason="empty_map",
+            target_obj=obj_name,
+            map_path=str(path),
+            profile=data.get("profile", ""),
+        )
+
     prec = int(data.get("uv_precision", DEFAULT_UV_PREC))
     layer_name = uv_layer or data.get("uv_layer", "UVMap")
 
@@ -355,9 +506,10 @@ def apply_map(
     if uv is None:
         raise ValueError(f"UV layer {layer_name!r} not found on {obj_name!r}")
 
-    targets = _iter_target_edges(data)
+    allowed = material_slot_indices
     applied = 0
     skipped = 0
+    skipped_wrong_material = 0
     for edge_uv_a, edge_uv_b in targets:
         want = frozenset({edge_uv_a, edge_uv_b})
         found = None
@@ -365,9 +517,13 @@ def apply_map(
             if _edge_uv_keys(e, uv, prec) != want:
                 continue
             tris = [f for f in e.link_faces if len(f.verts) == 3]
-            if len(tris) == 2:
-                found = e
-                break
+            if len(tris) != 2:
+                continue
+            if allowed is not None and not all(f.material_index in allowed for f in tris):
+                skipped_wrong_material += 1
+                continue
+            found = e
+            break
         if not found:
             skipped += 1
             continue
@@ -383,11 +539,14 @@ def apply_map(
     return {
         "object": obj_name,
         "profile": data.get("profile", ""),
-        "map": str(map_path),
+        "map": str(path),
         "dry_run": dry_run,
+        "skipped": False,
         "targets": len(targets),
         "applied": applied,
-        "skipped": skipped,
+        "skipped_edges": skipped,
+        "skipped_wrong_material": skipped_wrong_material,
+        "material_slot_indices": sorted(allowed) if allowed is not None else None,
     }
 
 
@@ -397,19 +556,82 @@ def apply_profile(
     *,
     map_path: str | Path | None = None,
     uv_layer: str | None = None,
+    material_token: str | None = None,
     dry_run: bool = False,
     profiles_dir: Path | None = None,
 ) -> dict[str, Any]:
     prof = Profile.load(profile_name, profiles_dir)
     path = Path(map_path) if map_path else prof.map_path
+    token = material_token if material_token is not None else prof.material_token
+
     if not path.is_file():
-        raise FileNotFoundError(f"Map not found for profile {profile_name!r}: {path}")
-    return apply_map(
+        return _skip_result(
+            reason="map_not_found",
+            profile=profile_name,
+            target_obj=target_obj,
+            map_path=str(path),
+            material_token=token,
+        )
+
+    allowed_slots: Set[int] | None = None
+    resolved_material = None
+    if token:
+        try:
+            resolved_material = _resolve_material_by_token(token)
+        except (FileNotFoundError, ImportError) as exc:
+            return _skip_result(
+                reason="material_resolver_unavailable",
+                profile=profile_name,
+                target_obj=target_obj,
+                map_path=str(path),
+                material_token=token,
+                error=str(exc),
+            )
+        if resolved_material is None:
+            return _skip_result(
+                reason="material_not_found",
+                profile=profile_name,
+                target_obj=target_obj,
+                map_path=str(path),
+                material_token=token,
+            )
+        obj = bpy.data.objects.get(target_obj)
+        if obj is None or obj.type != "MESH":
+            return _skip_result(
+                reason="mesh_object_not_found",
+                profile=profile_name,
+                target_obj=target_obj,
+                map_path=str(path),
+                material_token=token,
+            )
+        allowed_slots = material_slot_indices(obj, resolved_material)
+        if not allowed_slots:
+            return _skip_result(
+                reason="material_not_on_object",
+                profile=profile_name,
+                target_obj=target_obj,
+                map_path=str(path),
+                material_token=token,
+                material_name=resolved_material.name,
+            )
+
+    result = apply_map(
         target_obj,
         path,
         uv_layer=uv_layer or prof.uv_layer,
+        material_slot_indices=allowed_slots,
         dry_run=dry_run,
     )
+    if result.get("skipped"):
+        result.setdefault("profile", profile_name)
+        result.setdefault("material_token", token)
+        return result
+
+    result["profile"] = profile_name
+    if token:
+        result["material_token"] = token
+        result["material_name"] = resolved_material.name if resolved_material else None
+    return result
 
 
 def audit_topology(obj_name: str) -> dict[str, int]:
