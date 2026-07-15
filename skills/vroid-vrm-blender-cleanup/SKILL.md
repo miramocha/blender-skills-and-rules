@@ -109,7 +109,7 @@ flowchart TD
 - [ ] phase-c-textures — MToon texture audit → apply → verify
 - [ ] phase-b-rescan — Re-run material rename for `.001` mats after C and after ARKit
 - [ ] phase-c-arkit-cleanup — Merge legacy `.001` texture datablocks on ARKit duplicate materials
-- [ ] phase-j-mtoon-sync — Sync rim from face reference; GI = 1.0; Toony = 0.95; Emissive black (not Shading Shift)
+- [ ] phase-j-mtoon-sync — Sync rim + Shading Toony from face reference (not Shading Shift)
 - [ ] phase-d-arkit — Beyond Expressions ARKit (male/female required)
 - [ ] phase-e-reset — Zero Face shape key values (only after D)
 - [ ] phase-f-shapekeys — Fcl_* → vroid* + VRM expression binds
@@ -128,7 +128,7 @@ flowchart TD
 | **C** | Yes | [rename_mtoon_textures.py](tools/rename_mtoon_textures.py) | Texture datablocks + disk PNGs; **ARKit dup cleanup** after D |
 | **D** | If ARKit | [transfer_arkit_shapekeys.py](tools/transfer_arkit_shapekeys.py) | Beyond Expressions ARKit |
 | **E** | If D applied | [reset_shape_keys.py](tools/reset_shape_keys.py) | Zero Face shape key values |
-| **J** | Yes | [sync_mtoon_attributes.py](../mtoon-material-sync/tools/sync_mtoon_attributes.py) | Rim from reference; **GI = 1.0**; **Toony = 0.95**; **Emissive black**; Shading Shift per-material |
+| **J** | Yes | [sync_mtoon_attributes.py](../mtoon-material-sync/tools/sync_mtoon_attributes.py) | Rim + Shading Toony sync from reference mat; **Shading Shift stays per-material** |
 | **F** | Yes | [remap_shapekeys.py](../vroid-shapekey-remap/tools/remap_shapekeys.py) | `Fcl_*` → `vroid*` + VRM expression binds |
 | **G** | Yes | [remap_bones.py](../blender-bone-remap/tools/remap_bones.py) | Custom bone remap 2-pass + hair mirror (**requires A**) |
 | **H** | Yes | [rename_vrm_colliders.py](../blender-bone-remap/tools/rename_vrm_colliders.py) | Collider Empties + `collider_display_name` |
@@ -334,7 +334,7 @@ Skip this follow-up if D already ran in the same session.
 
 **E:** Zeros shape key **values** on Face — only after successful D.
 
-**J:** Copies MToon rim from reference. **GI Equalization** = **1.0**, **Shading Toony** = **0.95**, **Emissive Factor** black on all mats. Does **not** copy Shading Shift.
+**J:** Copies MToon rim + **Shading Toony** from reference. Does **not** copy Shading Shift (face vs body/hair differ).
 
 **F:** `Fcl_*` → `vroid*` rename + VRM0 expression bind `index` field updates.
 

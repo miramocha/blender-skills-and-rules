@@ -15,19 +15,6 @@ import bpy
 
 MTOON_OUTPUT_NODE = "Mtoon1Material.Mtoon1Output"
 DEFAULT_REFERENCE_MATERIAL = "Face_00_SKIN (Instance)"
-SHADING_TOONY_TARGET = 0.95
-GI_EQUALIZATION_TARGET = 1.0
-EMISSIVE_FACTOR_TARGET: Tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)
-
-Scalar = Union[int, float]
-Value = Union[Scalar, Sequence[Scalar]]
-
-# Project rule: fixed targets (not copied from reference).
-FIXED_INPUT_DEFAULTS: Dict[str, Value] = {
-    "Shading Toony": SHADING_TOONY_TARGET,
-    "GI Equalization Factor": GI_EQUALIZATION_TARGET,
-    "Emissive Factor": EMISSIVE_FACTOR_TARGET,
-}
 
 # Inputs copied for a consistent rim look (parametric values only; not texture links).
 RIM_INPUTS: Tuple[str, ...] = (
@@ -42,32 +29,18 @@ RIM_INPUTS: Tuple[str, ...] = (
 # Toon shading params synced from reference. Shading Shift is intentionally excluded —
 # face skin usually uses a different shift than body/hair/cloth; keep per-material.
 SHADING_INPUTS: Tuple[str, ...] = (
-    "GI Equalization Factor",
     "Shading Toony",
     "Shading Shift Texture Scale",
     "Expression Shade Color Bind",
 )
 
-EMISSION_INPUTS: Tuple[str, ...] = (
-    "Emissive Factor",
-)
-
 SYNC_GROUPS: Dict[str, Tuple[str, ...]] = {
     "rim": RIM_INPUTS,
     "shading": SHADING_INPUTS,
-    "emission": EMISSION_INPUTS,
 }
 
-def _apply_fixed_input_defaults(values: Dict[str, dict]) -> Dict[str, dict]:
-    patched = {name: dict(entry) for name, entry in values.items()}
-    for name, target in FIXED_INPUT_DEFAULTS.items():
-        entry = patched.get(name)
-        if not entry or entry.get("missing"):
-            continue
-        entry["linked"] = False
-        entry["default"] = target
-        patched[name] = entry
-    return patched
+Scalar = Union[int, float]
+Value = Union[Scalar, Sequence[Scalar]]
 
 
 def _copy_value(val: Value) -> Value:
@@ -90,7 +63,7 @@ def _values_equal(a: Value, b: Value) -> bool:
 
 def _resolve_groups(groups: Optional[Iterable[str]] = None) -> List[str]:
     if groups is None:
-        return ["rim", "shading", "emission"]
+        return ["rim", "shading"]
     chosen = [g.lower() for g in groups]
     unknown = [g for g in chosen if g not in SYNC_GROUPS]
     if unknown:
@@ -212,7 +185,7 @@ def audit_mtoon_sync(
             "error": f"reference material not found or has no {MTOON_OUTPUT_NODE}: {reference_material}",
         }
 
-    ref_values = _apply_fixed_input_defaults(ref_extract["values"])
+    ref_values = ref_extract["values"]
     rows: List[dict] = []
     for mat in _iter_target_materials(
         reference_material=reference_material,
@@ -309,24 +282,6 @@ def apply_mtoon_sync(
     ref_values = audit["reference_values"]
     updated: List[dict] = []
     skipped: List[dict] = []
-
-    ref_mat = bpy.data.materials.get(reference_material)
-    if ref_mat:
-        ref_node = _mtoon_output_node(ref_mat)
-        if ref_node:
-            changed_inputs: List[str] = []
-            for name, target in FIXED_INPUT_DEFAULTS.items():
-                if name not in ref_values:
-                    continue
-                inp = ref_node.inputs.get(name)
-                if inp is None:
-                    continue
-                if _apply_input_value(inp, ref_values[name]):
-                    changed_inputs.append(name)
-            if changed_inputs:
-                updated.append(
-                    {"material": ref_mat.name, "changed": changed_inputs, "reference": True}
-                )
 
     for mat in _iter_target_materials(
         reference_material=reference_material,
