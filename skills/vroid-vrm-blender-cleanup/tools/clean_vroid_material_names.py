@@ -3,9 +3,10 @@ Strip VRoid material ID prefixes from bpy.data.materials names.
 
 Source names (VRoid import) stay as-is until Phase B runs, e.g.
   N00_000_00_Face_00_SKIN (Instance)
-Workflow renames them to friendly names, e.g.
-  Face_Skin
+Workflow renames use dot notation + Title Case, e.g.
+  Face.Skin
 
+VRoid uses `_00_` as a category separator (Face_00_SKIN → Face.Skin).
 Alias map on scene links source → workflow for downstream skills.
 """
 
@@ -17,25 +18,26 @@ from typing import Dict, List, Optional, Tuple
 
 import bpy
 
-# N00_006_01_ — third segment is 2 digits (body, shoes, cloth outfit slots)
-VRoid_NUMERIC_PREFIX = re.compile(r"N\d{2}_\d{3}_\d{2}_")
+# N00_005_01_ / N00_000_00_ — outfit or body slot prefix
+VRoid_SLOT_PREFIX = re.compile(r"^N\d{2}_\d{3}_(?:\d{2}|[A-Za-z]+)_")
 
-# N00_000_Hair_00_ — third segment is a word (hair, etc.)
-VRoid_NAMED_PREFIX = re.compile(r"N\d{2}_\d{3}_[A-Za-z]+_\d{2}_")
+# Hair strand: N00_000_Hair_00_HAIR_01 → Hair.01
+VRoid_HAIR_STRAND_PREFIX = re.compile(r"^N\d{2}_\d{3}_Hair_\d{2}_HAIR_(\d+)$")
 
 INSTANCE_SUFFIX = re.compile(r" \(Instance\)$")
 
-# Scene JSON: { "N00_…_Tops_01_CLOTH_01 (Instance)": "Hoodie_01", … }
 SCENE_RENAME_MAP_KEY = "vroid_material_rename_map"
 
-# VRoid tail (after prefix strip) → friendly material name.
-CLOTHING_TAIL_ALIASES: Dict[str, str] = {
+# VRoid clothing tail (after slot prefix strip) → workflow basename
+CLOTHING_ITEM_ALIASES: Dict[str, str] = {
     "Tops_01_CLOTH": "Hoodie",
 }
 
-SKIN_TAIL_ALIASES: Dict[str, str] = {
-    "Body_00_SKIN": "Body_Skin",
-    "Face_00_SKIN": "Face_Skin",
+# VRoid eye tail (before _00_EYE) → workflow feature for {Feature}.Eye
+EYE_FEATURE_NAMES: Dict[str, str] = {
+    "EyeIris": "Iris",
+    "EyeHighlight": "EyeHighlight",
+    "EyeWhite": "EyeWhite",
 }
 
 DRY_RUN = True
@@ -50,48 +52,96 @@ def strip_instance_suffix(name: str) -> str:
     return INSTANCE_SUFFIX.sub("", name)
 
 
-def friendly_clothing_tail(tail: str) -> str:
-    if tail in CLOTHING_TAIL_ALIASES:
-        return CLOTHING_TAIL_ALIASES[tail]
-    for vroid_tail, friendly in CLOTHING_TAIL_ALIASES.items():
-        layer_prefix = f"{vroid_tail}_"
-        if tail.startswith(layer_prefix):
-            layer = tail[len(layer_prefix) :]
-            if layer.isdigit():
-                return f"{friendly}_{layer}"
+def strip_vroid_slot_prefix(name: str) -> str:
+    """Remove leading N{xx}_{xxx}_{slot}_ import prefix."""
+    bare = strip_instance_suffix(name)
+    m = VRoid_HAIR_STRAND_PREFIX.match(bare)
+    if m:
+        return f"Hair_00_HAIR_{m.group(1)}"
+    return VRoid_SLOT_PREFIX.sub("", bare)
+
+
+def _title_word(word: str) -> str:
+    if not word:
+        return word
+    return word[0].upper() + word[1:].lower()
+
+
+def _split_region_subpart(left: str) -> Tuple[str, str]:
+    """FaceMouth → (Face, Mouth), EyeIris → (Eye, Iris), HairBack → (Hair, Back)."""
+    for region in ("Face", "Eye", "Hair", "Body"):
+        if left == region:
+            return region, ""
+        if left.startswith(region) and len(left) > len(region):
+            return region, _title_word(left[len(region) :])
+    return _title_word(left), ""
+
+
+def standardize_workflow_tail(tail: str) -> str:
+    """VRoid tail after prefix strip → workflow dot name."""
+    if not tail:
+        return tail
+
+    # Clothing: Shoes_01_CLOTH → Shoes.Cloth; Tops_01_CLOTH_01 → Hoodie_01.Cloth
+    cloth = re.match(r"^([A-Za-z]+)_(\d{2})_CLOTH(?:_(\d+))?$", tail)
+    if cloth:
+        item, slot, layer = cloth.group(1), cloth.group(2), cloth.group(3)
+        base_key = f"{item}_{slot}_CLOTH"
+        item_name = CLOTHING_ITEM_ALIASES.get(base_key, _title_word(item))
+        if layer:
+            return f"{item_name}_{layer}.Cloth"
+        return f"{item_name}.Cloth"
+
+    # Category separator _00_ (Face_00_SKIN, FaceMouth_00_FACE, Hair_00_HAIR_01)
+    if "_00_" in tail:
+        left, right = tail.split("_00_", 1)
+        category = _title_word(right.lower())
+
+        strand = re.match(r"^HAIR_(\d+)$", right)
+        if strand:
+            return f"Hair.{strand.group(1)}"
+
+        region, sub = _split_region_subpart(left)
+
+        # FACE category: FaceMouth_00_FACE → Mouth.Face (feature.category)
+        if right == "FACE" and sub:
+            return f"{sub}.{category}"
+
+        # EYE category: EyeIris_00_EYE → Iris.Eye; EyeHighlight_00_EYE → EyeHighlight.Eye
+        if right == "EYE":
+            feature = EYE_FEATURE_NAMES.get(left, sub if sub else _title_word(left))
+            return f"{feature}.{category}"
+
+        if sub:
+            return f"{region}.{sub}"
+
+        return f"{region}.{category}"
+
     return tail
 
 
-def friendly_skin_tail(tail: str) -> str:
-    return SKIN_TAIL_ALIASES.get(tail, tail)
-
-
-def apply_friendly_tail(tail: str) -> str:
-    return friendly_skin_tail(friendly_clothing_tail(tail))
-
-
-def apply_friendly_material_name(cleaned: str) -> str:
+def apply_workflow_material_name(cleaned: str) -> str:
     if cleaned.startswith("MToon Outline ("):
         inner = cleaned[len("MToon Outline (") : -1]
-        friendly = apply_friendly_tail(inner)
-        if friendly != inner:
-            return f"MToon Outline ({friendly})"
+        workflow = standardize_workflow_tail(inner)
+        if workflow != inner:
+            return f"MToon Outline ({workflow})"
         return cleaned
-    return apply_friendly_tail(cleaned)
+    return standardize_workflow_tail(cleaned)
 
 
 def clean_vroid_material_name(name: str) -> str:
-    cleaned = VRoid_NUMERIC_PREFIX.sub("", name)
-    cleaned = VRoid_NAMED_PREFIX.sub("", cleaned)
-    cleaned = strip_instance_suffix(cleaned)
-    return apply_friendly_material_name(cleaned)
+    cleaned = strip_vroid_slot_prefix(name)
+    return apply_workflow_material_name(cleaned)
 
 
 def needs_cleanup(name: str) -> bool:
-    return (
-        VRoid_NUMERIC_PREFIX.search(name) is not None
-        or VRoid_NAMED_PREFIX.search(name) is not None
-    )
+    bare = strip_instance_suffix(name)
+    if VRoid_SLOT_PREFIX.search(bare):
+        return True
+    if VRoid_HAIR_STRAND_PREFIX.match(bare):
+        return True
+    return False
 
 
 def load_stored_rename_map(scene: Optional[bpy.types.Scene] = None) -> Dict[str, str]:
@@ -120,66 +170,55 @@ def store_rename_map(
 
 
 def _intermediate_stripped_name(name: str) -> str:
-    """Prefix + Instance strip only — before friendly clothing alias."""
-    cleaned = VRoid_NUMERIC_PREFIX.sub("", name)
-    cleaned = VRoid_NAMED_PREFIX.sub("", cleaned)
-    return strip_instance_suffix(cleaned)
+    """Prefix strip only — before workflow standardize."""
+    return strip_vroid_slot_prefix(name)
 
 
-def skin_name_variants(token: str) -> List[str]:
+def _clothing_variants(token: str) -> List[str]:
     variants = {token}
-    for vroid_tail, friendly in SKIN_TAIL_ALIASES.items():
-        if token in (vroid_tail, friendly):
-            variants.add(vroid_tail)
-            variants.add(friendly)
-    return sorted(variants)
-
-
-def clothing_name_variants(token: str) -> List[str]:
-    """Friendly name ↔ VRoid tail (e.g. Hoodie_01 ↔ Tops_01_CLOTH_01)."""
-    variants = {token}
-    for vroid_tail, friendly in CLOTHING_TAIL_ALIASES.items():
-        if token == friendly:
-            variants.add(vroid_tail)
-        elif token.startswith(f"{friendly}_"):
-            layer = token[len(friendly) + 1 :]
+    for vroid_base, friendly in CLOTHING_ITEM_ALIASES.items():
+        if token == f"{friendly}.Cloth":
+            variants.add(vroid_base)
+        layered = re.match(rf"^{re.escape(friendly)}_(\d+)\.Cloth$", token)
+        if layered:
+            variants.add(f"{vroid_base}_{layered.group(1)}")
+        legacy = re.match(rf"^{re.escape(friendly)}\.(\d+)$", token)
+        if legacy:
+            variants.add(f"{vroid_base}_{legacy.group(1)}")
+            variants.add(f"{friendly}_{legacy.group(1)}.Cloth")
+        if token == vroid_base:
+            variants.add(f"{friendly}.Cloth")
+        elif token.startswith(vroid_base + "_"):
+            layer = token[len(vroid_base) + 1 :]
             if layer.isdigit():
-                variants.add(f"{vroid_tail}_{layer}")
-        if token == vroid_tail:
-            variants.add(friendly)
-        elif token.startswith(f"{vroid_tail}_"):
-            layer = token[len(vroid_tail) + 1 :]
-            if layer.isdigit():
-                variants.add(f"{friendly}_{layer}")
+                variants.add(f"{friendly}_{layer}.Cloth")
     return sorted(variants)
 
 
 def material_name_variants(token: str, scene: Optional[bpy.types.Scene] = None) -> List[str]:
-    """Import name, VRoid tail, friendly name, and stored aliases."""
-    variants = set(skin_name_variants(token))
-    variants.update(clothing_name_variants(token))
+    """Import name, VRoid tail, workflow name, and stored aliases."""
+    variants = {token}
+    variants.update(_clothing_variants(token))
     if needs_cleanup(token):
         variants.add(_intermediate_stripped_name(token))
         variants.add(clean_vroid_material_name(token))
     else:
-        variants.add(apply_friendly_material_name(token))
+        stripped = _intermediate_stripped_name(token) if VRoid_SLOT_PREFIX.search(token) else token
+        variants.add(apply_workflow_material_name(stripped))
+        variants.add(apply_workflow_material_name(token))
 
     fwd = load_stored_rename_map(scene)
     for old, new in fwd.items():
-        if token in (old, new):
-            variants.add(old)
-            variants.add(new)
-            continue
-        if needs_cleanup(old):
-            variants.add(_intermediate_stripped_name(old))
         stripped = _intermediate_stripped_name(old) if needs_cleanup(old) else old
-        if token in stripped or token in new or token in old:
-            variants.add(old)
-            variants.add(new)
-        variants.update(clothing_name_variants(new))
-        variants.update(clothing_name_variants(stripped))
-        variants.update(skin_name_variants(new))
-        variants.update(skin_name_variants(stripped))
+        related = token in (old, new, stripped)
+        if not related:
+            continue
+        variants.add(old)
+        variants.add(new)
+        if needs_cleanup(old):
+            variants.add(stripped)
+        variants.update(_clothing_variants(new))
+        variants.update(_clothing_variants(stripped))
 
     return sorted(variants)
 
@@ -188,8 +227,16 @@ def resolve_material_by_token(
     token: str,
     scene: Optional[bpy.types.Scene] = None,
 ) -> Optional[bpy.types.Material]:
-    """Match material by Phase B name, VRoid import name, or stored rename alias."""
-    for name in material_name_variants(token, scene):
+    """Match material by workflow name, VRoid import name, or stored rename alias."""
+    mat = bpy.data.materials.get(token)
+    if mat:
+        return mat
+
+    names = material_name_variants(token, scene)
+    if token in names:
+        names = [token] + [n for n in names if n != token]
+
+    for name in names:
         mat = bpy.data.materials.get(name)
         if mat:
             return mat
@@ -197,7 +244,7 @@ def resolve_material_by_token(
     candidates = [m for m in bpy.data.materials if token in m.name]
     if not candidates:
         return None
-    return min(candidates, key=lambda m: (token not in m.name, len(m.name), m.name))
+    return min(candidates, key=lambda m: (m.name != token, len(m.name), m.name))
 
 
 def unique_material_name(desired: str, current: bpy.types.Material) -> str:

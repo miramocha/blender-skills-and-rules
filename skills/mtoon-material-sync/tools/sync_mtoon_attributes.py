@@ -3,8 +3,8 @@ Sync MToon 1.0 look attributes (rim + shading) across materials from a reference
 
 Run via MCP execute_blender_code or Blender Scripting workspace:
 
-    result = audit_mtoon_sync(reference_material="Face_Skin")
-    result = apply_mtoon_sync(reference_material="Face_Skin", dry_run=False)
+    result = audit_mtoon_sync(reference_material="Face.Skin")
+    result = apply_mtoon_sync(reference_material="Face.Skin", dry_run=False)
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 import bpy
 
 MTOON_OUTPUT_NODE = "Mtoon1Material.Mtoon1Output"
-DEFAULT_REFERENCE_MATERIAL = "Face_Skin"
+DEFAULT_REFERENCE_MATERIAL = "Face.Skin"
 
 # Inputs copied for a consistent rim look (parametric values only; not texture links).
 RIM_INPUTS: Tuple[str, ...] = (

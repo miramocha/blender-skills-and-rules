@@ -14,7 +14,7 @@ result = audit_mtoon_sync()
 result = apply_mtoon_sync(dry_run=False)
 ```
 
-Expected: body/hair/cloth **rim + Shading Toony** align with material containing `Face_Skin`; **Shading Shift** unchanged per slot.
+Expected: body/hair/cloth **rim + Shading Toony** align with material containing `Face.Skin`; **Shading Shift** unchanged per slot.
 
 ## Rim only
 

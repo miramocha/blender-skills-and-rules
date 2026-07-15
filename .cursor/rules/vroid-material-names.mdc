@@ -1,48 +1,46 @@
 ---
-description: VRoid material import names, Phase B cleanup targets, and alias lookup for downstream Blender skills
+description: VRoid material import names, Phase B workflow dot notation, and alias lookup
 alwaysApply: true
 ---
 
 # VRoid material names
 
-## Phase B cleanup (strip prefix + Instance)
+## Source vs workflow
 
-| Pattern removed | Example |
-|-----------------|---------|
-| `N\d{2}_\d{3}_\d{2}_` | `N00_005_01_`, `N00_001_02_` |
-| `N\d{2}_\d{3}_[A-Za-z]+_\d{2}_` | `N00_000_Hair_00_` |
-| trailing ` (Instance)` | outline mats: inner name only |
+| | Example |
+|---|---------|
+| **Source** (VRoid import, until Phase B) | `N00_000_00_Face_00_SKIN (Instance)` |
+| **Workflow** (pipeline scripts) | `Face.Skin` |
 
-## Skin materials
+Phase B stores `scene["vroid_material_rename_map"]` (`source → workflow`).
 
-VRoid **source** name is unchanged on import. Phase B **workflow** rename:
+## Standardization rule
 
-| Source (VRoid import) | Workflow name |
-|-----------------------|---------------|
-| `N00_000_00_Face_00_SKIN (Instance)` | `Face_Skin` |
-| `N00_000_00_Body_00_SKIN (Instance)` | `Body_Skin` |
+1. Strip `N{xx}_{xxx}_{slot}_` import prefix and ` (Instance)`
+2. VRoid `_00_` is a **category separator** → replace with `.` + Title Case
+3. `_00_FACE` category → `{Feature}.Face` (e.g. `FaceMouth` → `Mouth.Face`). `_00_EYE` → `{Feature}.Eye` (e.g. `EyeIris_00_EYE` → `Iris.Eye`, `EyeHighlight_00_EYE` → `EyeHighlight.Eye`). Other: `Face_00_SKIN` → `Face.Skin`
+4. Clothing `_01_CLOTH` → `{Item}.Cloth`; layered → `{ItemAlias}_{NN}.Cloth` (e.g. `Hoodie_01.Cloth`)
 
-Use **`Face_Skin`** / **`Body_Skin`** in pipeline scripts. `resolve_material_by_token("Face_Skin")` still matches the source datablock before Phase B runs.
+## Workflow name table (this project)
 
-## Clothing naming (keep tail + layer suffix)
+| Source tail | Workflow |
+|-------------|----------|
+| `Face_00_SKIN` | `Face.Skin` |
+| `Body_00_SKIN` | `Body.Skin` |
+| `FaceMouth_00_FACE` | `Mouth.Face` |
+| `FaceBrow_00_FACE` | `Brow.Face` |
+| `FaceEyelash_00_FACE` | `Eyelash.Face` |
+| `FaceEyeline_00_FACE` | `Eyeline.Face` |
+| `EyeIris_00_EYE` | `Iris.Eye` |
+| `EyeHighlight_00_EYE` | `EyeHighlight.Eye` |
+| `EyeWhite_00_EYE` | `EyeWhite.Eye` |
+| `HairBack_00_HAIR` | `Hair.Back` |
+| `Hair_00_HAIR_{NN}` | `Hair.{NN}` |
+| `Shoes_01_CLOTH` | `Shoes.Cloth` |
+| `Tops_01_CLOTH_{NN}` | `Hoodie_{NN}.Cloth` |
 
-| Import | After Phase B | Meaning |
-|--------|---------------|---------|
-| `N00_005_01_Tops_01_CLOTH (Instance)` | `Hoodie` |
-| `N00_005_01_Tops_01_CLOTH_01 (Instance)` | `Hoodie_01` |
-| `N00_005_01_Tops_01_CLOTH_02 (Instance)` | `Hoodie_02` |
-| `N00_001_02_*_CLOTH (Instance)` | `*_CLOTH` | Uniform **vest** slot |
+## Lookup
 
-VRoid tail `Tops_01_CLOTH` (+ optional `_01`, `_02` layers) → **`Hoodie`**, **`Hoodie_01`**, **`Hoodie_02`**. Alias map keeps import + VRoid tail names for lookup.
+Use `resolve_material_by_token("Face.Skin")` from `clean_vroid_material_names.py` — accepts workflow token, VRoid tail, or full import name.
 
-## Alias map (match pre- and post-cleanup)
-
-Phase B stores `scene["vroid_material_rename_map"]` (`import_name` → `cleaned_name`).
-
-When matching materials (tri-to-quad extraction, MToon sync, mesh-by-slot):
-
-1. Use `resolve_material_by_token(token)` from `skills/vroid-vrm-blender-cleanup/tools/clean_vroid_material_names.py`
-2. Or `material_name_variants(token)` to test both import and cleaned names
-3. Prefer tokens like `Hoodie`, `Hoodie_01`, `Face_Skin` — `resolve_material_by_token()` also accepts VRoid import / tail names via alias map
-
-Do not assume materials still carry `N00_*` after Phase B has run.
+Texture slugs: dots → underscores (`Face.Skin` → `face_skin`).
