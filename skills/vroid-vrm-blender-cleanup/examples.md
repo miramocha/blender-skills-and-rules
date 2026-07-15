@@ -43,7 +43,7 @@ result = run_full_pipeline(
 | E | All Face shape key values zeroed |
 | B rescan (ARKit) | `.001` ARKit duplicate materials cleaned |
 | C cleanup (ARKit) | 13 legacy `.001` textures merged → canonical images, datablocks purged |
-| J | Rim + Shading Toony synced from `Face_00_SKIN (Instance)`; Shading Shift unchanged |
+| J | Rim from face ref; GI = 1.0; Toony = 0.95; Emissive black; Shading Shift unchanged |
 | F | 57 `Fcl_*` → `vroid*`; 14 VRM expression binds updated |
 | G | 78 bones remapped; hair mirror pass applied |
 | H | 44 collider Empties + 22 `collider_display_name` entries |

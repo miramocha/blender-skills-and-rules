@@ -1,0 +1,13 @@
+{
+  "profile": "body",
+  "label": "VRoid body mesh (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/body-quad-dissolve.csv",
+  "notes": "Create maps/body-quad-dissolve.csv once from a reference Body.only → Body.only.quad pair, then apply to Body.Tris (or similar) on each import.",
+  "reference": {
+    "source_object": "Body.only",
+    "result_object": "Body.only.quad"
+  }
+}

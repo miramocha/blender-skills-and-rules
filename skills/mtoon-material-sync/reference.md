@@ -23,29 +23,39 @@
 
 | Input | Type | Typical face/skin value |
 |-------|------|-------------------------|
-| Shading Toony | float | `1.0` |
+| GI Equalization Factor | float | **`1.0`** (fixed project target; not from reference) |
+| Shading Toony | float | **`0.95`** (fixed project target; not from reference) |
 | Shading Shift Texture Scale | float | `1.0` |
 | Expression Shade Color Bind | Vector | `(0, 0, 0)` |
 
 **Not synced:** `Shading Shift` — face often `0.875`, body/cloth `0.0`, hair negative.
+
+### `emission`
+
+| Input | Type | Project target |
+|-------|------|----------------|
+| Emissive Factor | RGBA | **`(0, 0, 0, 1)`** black — unlinks `Emissive Texture` |
+
+**Not synced:** `Emissive Strength`, `Expression Emission Color Bind` (left per material unless already matching reference).
 
 ## Common VRoid mismatches (before sync)
 
 | Material kind | Often differs |
 |---------------|----------------|
 | Body / cloth | Shading Shift `0.0`, rim color black — shift left alone |
-| Hair | Shading Toony `~0.795`, Shading Shift negative — shift left alone |
+| Hair | Shading Toony `~0.795`, Shading Shift negative, linked emissive texture — shift left alone; emission forced black |
 | Eyes / face decals | May already match face |
 | Outline | Different toony/shift; optional `include_outline=True` |
 
 ## Apply rules
 
 1. Read **unlinked** default values from reference inputs.
-2. For each target material with matching input socket:
+2. Override **GI Equalization Factor** to **`1.0`**, **Shading Toony** to **`0.95`**, and **Emissive Factor** to **black** on every MToon material (reference included).
+3. For each target material with matching input socket:
    - Remove incoming links if reference uses a default value.
    - Copy `default_value`.
-3. Skip sockets missing on target (e.g. outline variant).
-4. Do **not** copy linked texture graphs automatically.
+4. Skip sockets missing on target (e.g. outline variant).
+5. Do **not** copy linked texture graphs automatically.
 
 ## Result dict keys
 

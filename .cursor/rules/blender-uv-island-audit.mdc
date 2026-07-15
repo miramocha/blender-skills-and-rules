@@ -1,0 +1,33 @@
+---
+description: Audit Blender UV islands by connectivity, not bbox; avoid false tris on mirror patches
+alwaysApply: true
+---
+
+# Blender UV island audit
+
+When checking topology (tris vs quads) or selecting faces on a **specific UV island** via Blender MCP:
+
+## Do
+
+1. **Cluster by UV connectivity** — faces share a UV island when linked through common UV loop coordinates (`round(u,4), round(v,4)`), not when centers merely overlap in UV space.
+2. **Report per island** — face count, topology (`3`/`4`/ngon), UV bbox for each disconnected island.
+3. **Match mirror islands pairwise** — compare mirrored UV corner sets (e.g. `u' = 1 - u`) and per-face topology at mirrored centers.
+4. **Trust UV sync selection** — if user says selected tris are not on their UV layout, re-audit with island clustering; prior bbox hits are likely wrong.
+
+## Do not
+
+- Filter faces with only `face_uv_center` inside a bbox. Tris on a **large main island** can sit inside a mirror patch's bbox but belong to a different island.
+- Assume one island per symmetric UV region on VRoid/VRM face meshes. Typical layout: one big main face island plus **small disconnected** left/right mirror patch islands.
+
+## Example pitfall (Face.only.quad)
+
+- Bbox filter found tris **2356, 2365, 2974, 2976** near mirror coords — actually on **main island 1** (3000+ tris).
+- True mirror patches: **149 quads each, 0 tris**, separate islands at `u ≈ 0.01–0.23` and `u ≈ 0.77–0.99`, `v ≈ 0.86–0.99`.
+
+## Topology mirror without built-in op
+
+When user wants matched quad topology across mirror patches (not `tris_convert_to_quads`):
+
+- Pair tris by mirrored edited-quad UV/mesh verts.
+- Join with `bmesh.ops.dissolve_edges` on the shared internal edge between the two tris.
+- Expect seam areas to need manual fixes when vert cuts differ between patches.

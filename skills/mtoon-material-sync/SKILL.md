@@ -1,10 +1,11 @@
 ---
 name: mtoon-material-sync
 description: >-
-  Sync MToon 1.0 rim-light and shading (toony/shift) parametric attributes across
-  Blender materials from a reference material for a consistent VRoid/VRM look.
-  Dry-run audit then apply via Blender MCP execute_blender_code. Use when matching
-  rim lights, Shading Toony, or unifying MToon rim look across avatar mats.
+  Sync MToon 1.0 rim-light and shading (GI equalization, toony/shift) parametric
+  attributes across Blender materials from a reference material for a consistent
+  VRoid/VRM look. Dry-run audit then apply via Blender MCP execute_blender_code.
+  Use when matching rim lights, GI Equalization Factor, Shading Toony, or
+  unifying MToon rim look across avatar mats.
 ---
 
 # MToon material sync
@@ -12,7 +13,9 @@ description: >-
 ## When to use
 
 - All avatar materials should share the same **rim lighting** response
-- **Shading Toony** should match face reference across body, hair, cloth
+- **Shading Toony** set to **`0.95`** on all MToon materials (project rule — not copied from reference)
+- **GI Equalization Factor** set to **`1.0`** on all MToon materials (project rule — not copied from reference)
+- **Emissive Factor** set to **black** `(0, 0, 0, 1)` — unlinks emissive textures (project rule)
 - **Shading Shift** stays **per-material** (face skin differs from body/hair/cloth)
 - After VRoid cleanup or manual rim tweaks on one material — propagate to the rest
 
@@ -45,7 +48,8 @@ Target node: `Mtoon1Material.Mtoon1Output` on each material.
 | Group | Inputs |
 |-------|--------|
 | **rim** | Parametric Rim Color, Parametric Rim Fresnel Power, Parametric Rim Lift, Rim LightingMix, Rim Color Texture, Expression Rim Color Bind |
-| **shading** | Shading Toony, Shading Shift Texture Scale, Expression Shade Color Bind |
+| **shading** | GI Equalization Factor (`1.0` fixed), Shading Toony (`0.95` fixed), Shading Shift Texture Scale, Expression Shade Color Bind |
+| **emission** | Emissive Factor (black `(0,0,0,1)` fixed; unlinks texture) |
 
 **Not synced:** Shading Shift (per slot), Shade Color tint, linked shade/normal/matcap textures.
 

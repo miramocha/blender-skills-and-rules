@@ -14,7 +14,7 @@ result = audit_mtoon_sync()
 result = apply_mtoon_sync(dry_run=False)
 ```
 
-Expected: body/hair/cloth **rim + Shading Toony** align with `Face_00_SKIN (Instance)`; **Shading Shift** unchanged per slot.
+Expected: body/hair/cloth **rim** align with `Face_00_SKIN (Instance)`; **GI Equalization** = `1.0`, **Shading Toony** = `0.95`, **Emissive Factor** black everywhere; **Shading Shift** unchanged per slot.
 
 ## Rim only
 
