@@ -174,7 +174,7 @@ def run_full_pipeline(
     import_directory: Optional[str] = None,
     import_filename: Optional[str] = None,
     skip_arkit: bool = False,
-    reference_material: str = "Face_00_SKIN (Instance)",
+    reference_material: str = "Face_Skin",
     mtoon_include_outline: bool = False,
 ) -> dict:
     chosen = _normalize_phases(phases)

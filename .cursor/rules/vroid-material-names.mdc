@@ -1,0 +1,48 @@
+---
+description: VRoid material import names, Phase B cleanup targets, and alias lookup for downstream Blender skills
+alwaysApply: true
+---
+
+# VRoid material names
+
+## Phase B cleanup (strip prefix + Instance)
+
+| Pattern removed | Example |
+|-----------------|---------|
+| `N\d{2}_\d{3}_\d{2}_` | `N00_005_01_`, `N00_001_02_` |
+| `N\d{2}_\d{3}_[A-Za-z]+_\d{2}_` | `N00_000_Hair_00_` |
+| trailing ` (Instance)` | outline mats: inner name only |
+
+## Skin materials
+
+VRoid **source** name is unchanged on import. Phase B **workflow** rename:
+
+| Source (VRoid import) | Workflow name |
+|-----------------------|---------------|
+| `N00_000_00_Face_00_SKIN (Instance)` | `Face_Skin` |
+| `N00_000_00_Body_00_SKIN (Instance)` | `Body_Skin` |
+
+Use **`Face_Skin`** / **`Body_Skin`** in pipeline scripts. `resolve_material_by_token("Face_Skin")` still matches the source datablock before Phase B runs.
+
+## Clothing naming (keep tail + layer suffix)
+
+| Import | After Phase B | Meaning |
+|--------|---------------|---------|
+| `N00_005_01_Tops_01_CLOTH (Instance)` | `Hoodie` |
+| `N00_005_01_Tops_01_CLOTH_01 (Instance)` | `Hoodie_01` |
+| `N00_005_01_Tops_01_CLOTH_02 (Instance)` | `Hoodie_02` |
+| `N00_001_02_*_CLOTH (Instance)` | `*_CLOTH` | Uniform **vest** slot |
+
+VRoid tail `Tops_01_CLOTH` (+ optional `_01`, `_02` layers) → **`Hoodie`**, **`Hoodie_01`**, **`Hoodie_02`**. Alias map keeps import + VRoid tail names for lookup.
+
+## Alias map (match pre- and post-cleanup)
+
+Phase B stores `scene["vroid_material_rename_map"]` (`import_name` → `cleaned_name`).
+
+When matching materials (tri-to-quad extraction, MToon sync, mesh-by-slot):
+
+1. Use `resolve_material_by_token(token)` from `skills/vroid-vrm-blender-cleanup/tools/clean_vroid_material_names.py`
+2. Or `material_name_variants(token)` to test both import and cleaned names
+3. Prefer tokens like `Hoodie`, `Hoodie_01`, `Face_Skin` — `resolve_material_by_token()` also accepts VRoid import / tail names via alias map
+
+Do not assume materials still carry `N00_*` after Phase B has run.
