@@ -37,7 +37,7 @@ Typical Windows path:
 ```python
 import os
 
-REPO_TOOLS = r"D:\MiraGameDev\blender-skills-and-rules\skills\blender-skill-log\tools"
+REPO_TOOLS = os.path.join(r"...", "skills", "blender-skill-log", "tools")
 SKILL_TOOLS = os.path.join(
     os.path.expanduser("~"), ".cursor", "skills", "blender-skill-log", "tools"
 )

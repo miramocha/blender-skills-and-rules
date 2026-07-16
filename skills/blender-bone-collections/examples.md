@@ -5,7 +5,10 @@
 ```python
 import os
 
-SKILL_TOOLS = r"D:\MiraGameDev\blender-skills-and-rules\skills\blender-bone-collections\tools"
+SKILL_TOOLS = os.path.join(
+    os.path.expanduser("~"), ".cursor", "skills", "blender-bone-collections", "tools"
+)
+# Repo: skills/blender-bone-collections/tools
 exec(open(os.path.join(SKILL_TOOLS, "assign_bone_collections.py"), encoding="utf-8").read())
 
 audit = audit_bone_collections(armature_object_name="Armature")

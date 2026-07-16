@@ -14,7 +14,7 @@ Designed to run through **Blender MCP** (`execute_blender_code`) or from Blender
 Point scripts at this repo’s `skills/` tree (not only `~/.cursor/skills`) so you get the latest tools:
 
 ```python
-REPO_SKILLS = r"D:\MiraGameDev\blender-skills-and-rules\skills"
+REPO_SKILLS = os.path.join(r"...", "skills")  # path to this repo's skills/ folder
 SKILL_TOOLS = os.path.join(REPO_SKILLS, "vroid-vrm-blender-cleanup", "tools")
 ```
 
@@ -235,7 +235,7 @@ See also the Cursor rule [vroid-material-names](../.cursor/rules/vroid-material-
 ```python
 import os, importlib
 
-REPO_TOOLS = r"D:\MiraGameDev\blender-skills-and-rules\skills\vroid-vrm-blender-cleanup\tools"
+REPO_TOOLS = os.path.join(r"...", "skills", "vroid-vrm-blender-cleanup", "tools")
 import run_full_pipeline as rfp
 importlib.reload(rfp)
 rfp.SKILL_TOOLS_DIR = REPO_TOOLS
@@ -249,7 +249,7 @@ result = rfp.run_full_pipeline(body_type="female", dry_run=False)  # apply
 ```python
 import os, sys
 
-REPO = r"D:\MiraGameDev\blender-skills-and-rules\skills"
+REPO = os.path.join(r"...", "skills")
 sys.path[:0] = [
     os.path.join(REPO, "tri-to-quad-uv-map", "tools"),
     os.path.join(REPO, "hair-tris-to-quad", "tools"),

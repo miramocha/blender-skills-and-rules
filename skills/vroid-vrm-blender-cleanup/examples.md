@@ -67,7 +67,7 @@ Remind user to **save the .blend** after Phase C and at end.
 
 ```python
 result = run_full_pipeline(
-    import_filepath=r"D:\MiraArt\MiraComms\digi-idog\IDOG DIGI_mesh.vrm",
+    import_filepath=r"D:\path\to\avatar.vrm",
     body_type="female",
     dry_run=False,
 )
@@ -92,14 +92,14 @@ SKILL = os.path.join(
 )
 
 exec(open(os.path.join(SKILL, "import_vrm.py")).read())
-listing = list_vrm_files(r"D:\MiraArt\MiraComms\digi-idog")
+listing = list_vrm_files(r"D:\path\to\vrm-folder")
 ```
 
 Import single file (new empty blend):
 
 ```python
 result = run_phase_import(
-    filepath=r"D:\MiraArt\MiraComms\digi-idog\IDOG DIGI_mesh.vrm",
+    filepath=r"D:\path\to\avatar.vrm",
     new_file=True,
     dry_run=False,
 )

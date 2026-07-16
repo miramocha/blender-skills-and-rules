@@ -39,7 +39,7 @@ import os
 SKILL_TOOLS = os.path.join(
     os.path.expanduser("~"), ".cursor", "skills", "vroid-vrm-blender-cleanup", "tools"
 )
-REPO_TOOLS = r"D:\MiraGameDev\blender-skills-and-rules\skills\vroid-vrm-blender-cleanup\tools"
+REPO_TOOLS = os.path.join(r"...", "skills", "vroid-vrm-blender-cleanup", "tools")
 if os.path.isdir(REPO_TOOLS):
     SKILL_TOOLS = REPO_TOOLS
 

@@ -5,7 +5,10 @@
 ```python
 import os
 
-SKILL_TOOLS = r"D:\MiraGameDev\blender-skills-and-rules\skills\mtoon-material-sync\tools"
+SKILL_TOOLS = os.path.join(
+    os.path.expanduser("~"), ".cursor", "skills", "mtoon-material-sync", "tools"
+)
+# Repo: skills/mtoon-material-sync/tools
 exec(open(os.path.join(SKILL_TOOLS, "sync_mtoon_attributes.py"), encoding="utf-8").read())
 
 result = audit_mtoon_sync()
