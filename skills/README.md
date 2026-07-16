@@ -20,26 +20,63 @@ SKILL_TOOLS = os.path.join(REPO_SKILLS, "vroid-vrm-blender-cleanup", "tools")
 
 ## Typical workflow
 
-```text
-Import VRM / open .blend
-        │
-        ▼
-vroid-vrm-blender-cleanup   (phases A–K: bones, materials, textures, ARKit, MToon, shape keys, rig)
-        │
-        ▼
-tri-to-quad-uv-map          (Face + Body material slots via UV CSV maps)
-        │
-        ▼
-hair-tris-to-quad           (strand Hair mesh — stock tris_convert_to_quads)
-        │
-        ▼
-uv-topology-symmetry        (optional audit — UV mirror partners after partial convert)
-        │
-        ▼
-Save .blend
+```mermaid
+flowchart TD
+  start[Import VRM / open .blend]
+  cleanup[vroid-vrm-blender-cleanup<br/>phases A–K]
+  tq[tri-to-quad-uv-map<br/>Face + Body slots]
+  hair[hair-tris-to-quad<br/>strand Hair mesh]
+  sym[uv-topology-symmetry<br/>optional UV audit]
+  save[Save .blend]
+
+  start --> cleanup --> tq --> hair
+  tq -.-> sym
+  hair --> save
 ```
 
 Destructive steps use **dry-run first**, then apply after approval.
+
+## Skill map
+
+```mermaid
+flowchart TB
+  subgraph orchestrator [vroid-vrm-blender-cleanup]
+    A[A VRM bones]
+    B[B materials]
+    C[C textures]
+    D[D ARKit]
+    E[E reset keys]
+    J[J MToon sync]
+    F[F Fcl remap]
+    G[G bone remap]
+    K[K bone collections]
+    H[H colliders]
+    I[I mesh data]
+  end
+
+  subgraph topology [post-cleanup topology]
+    TQ[tri-to-quad-uv-map]
+    HQ[hair-tris-to-quad]
+    UV[uv-topology-symmetry]
+  end
+
+  subgraph libs [shared / invoked by orchestrator]
+    MTOON[mtoon-material-sync]
+    SHAPE[vroid-shapekey-remap]
+    BONE[blender-bone-remap]
+    BC[blender-bone-collections]
+    LOG[blender-skill-log]
+  end
+
+  J --> MTOON
+  F --> SHAPE
+  G --> BONE
+  H --> BONE
+  K --> BC
+  orchestrator --> LOG
+  topology --> LOG
+  orchestrator --> topology
+```
 
 ## Skills
 
@@ -55,7 +92,30 @@ Destructive steps use **dry-run first**, then apply after approval.
 | [uv-topology-symmetry](uv-topology-symmetry/SKILL.md) | UV mirror audit and `TriQuad.*` vertex groups after tri→quad |
 | [blender-skill-log](blender-skill-log/SKILL.md) | JSON-line execution log (`skill_execution.log`) and per-phase `elapsed_ms` |
 
-### Cleanup pipeline phases (A–K)
+### Cleanup pipeline (phases A–K)
+
+```mermaid
+flowchart TD
+  start[Blend open + MCP]
+  optImport[Optional VRM import]
+  pA[Phase A: VRM bones_rename]
+  pB[Phase B: Material names]
+  pC[Phase C: MToon textures]
+  pB2[Phase B rescan: .001 mats]
+  pD[Phase D: ARKit transfer]
+  pE[Phase E: Reset shape key values]
+  pB3[Phase B rescan: ARKit .001 mats]
+  pC2[Phase C cleanup: ARKit texture dupes]
+  pJ[Phase J: MToon rim + shading sync]
+  pF[Phase F: Fcl to vroid + VRM expr]
+  pG[Phase G: Custom bone remap]
+  pK[Phase K: Bone collections]
+  pH[Phase H: Collider Empty + metadata]
+  pI[Phase I: Mesh datablock names]
+  done[Summary + save reminder]
+
+  start --> optImport --> pA --> pB --> pC --> pB2 --> pD --> pE --> pB3 --> pC2 --> pJ --> pF --> pG --> pK --> pH --> pI --> done
+```
 
 | Phase | What |
 |-------|------|
@@ -77,6 +137,33 @@ Phases B and C re-run after ARKit to catch `.001` duplicate materials.
 
 Run on **material slots**, not whole objects. On `Face`, run all eight face/eye profiles. On `Body`, run `body` then `hairback`. Use [hair-tris-to-quad](hair-tris-to-quad/SKILL.md) for the separate `Hair` strand object.
 
+```mermaid
+flowchart LR
+  subgraph face [Face object]
+    f1[face]
+    f2[mouth]
+    f3[eyebrow]
+    f4[eyelash]
+    f5[eyeline]
+    f6[iris]
+    f7[eyehighlight]
+    f8[eyewhite]
+  end
+
+  subgraph body [Body object]
+    b1[body]
+    b2[hairback]
+  end
+
+  subgraph hair [Hair object]
+    h1[tris_convert_to_quads]
+  end
+
+  face --> NT[Normal transfer<br/>Face.old archive]
+  body --> NA[modifier_apply]
+  hair --> VG[Hair.Cap / Hair.Strip VGs]
+```
+
 | Profile | Material token | Object |
 |---------|----------------|--------|
 | `face` | `Face.Skin` | Face |
@@ -90,21 +177,56 @@ Run on **material slots**, not whole objects. On `Face`, run all eight face/eye 
 | `body` | `Body.Skin` | Body |
 | `hairback` | `Hair.Back` | Body |
 
+### Tri→quad apply flow (per profile)
+
+```mermaid
+flowchart TD
+  dup[Duplicate target → NormalSrc hidden]
+  dissolve[Apply UV CSV edge dissolves]
+  dt[Data Transfer corner normals]
+  apply{Shape keys?}
+  addon[apply_modifiers_with_shape_keys]
+  mod[modifier_apply]
+  archive{Transfer OK?}
+  old[Keep as Object.old hidden]
+  del[Delete NormalSrc]
+
+  dup --> dissolve --> dt --> apply
+  apply -->|yes| addon --> archive
+  apply -->|no| mod --> archive
+  archive -->|yes + shape keys| old
+  archive -->|no| del
+```
+
 ## Folder layout
 
-```text
-skills/<skill-name>/
-  SKILL.md          # Agent-facing instructions (YAML frontmatter + workflow)
-  tools/*.py        # Runnable Blender scripts
-  profiles/*.json   # Profile config (tri-to-quad, hair, UV symmetry)
-  maps/*.csv        # UV dissolve edge lists (tri-to-quad)
-  examples.md       # Optional usage examples
-  reference.md      # Optional naming tables / API notes
+```mermaid
+flowchart TB
+  root[skills/skill-name/]
+  root --> skill[SKILL.md]
+  root --> tools[tools/*.py]
+  root --> profiles[profiles/*.json]
+  root --> maps[maps/*.csv]
+  root --> examples[examples.md]
+  root --> reference[reference.md]
 ```
 
 ## Material naming
 
 VRoid import names (`N00_000_00_Face_00_SKIN (Instance)`) are normalized to **workflow** names (`Face.Skin`) in Phase B. Pipeline scripts resolve either form via `resolve_material_by_token()` in `clean_vroid_material_names.py`.
+
+```mermaid
+flowchart LR
+  src["N00_…_Face_00_SKIN (Instance)"]
+  phaseB[Phase B rename]
+  workflow[Face.Skin]
+  resolve[resolve_material_by_token]
+  scripts[Pipeline + tri-to-quad scripts]
+
+  src --> phaseB --> workflow
+  src --> resolve
+  workflow --> resolve --> scripts
+```
 
 See also the Cursor rule [vroid-material-names](../.cursor/rules/vroid-material-names.mdc).
 
@@ -146,6 +268,18 @@ hq.apply_tris_to_quads("Hair", dry_run=False)
 ```
 
 ## Execution logging
+
+```mermaid
+flowchart LR
+  skill[Skill script]
+  stdout[MCP stdout<br/>skill JSON lines]
+  log[skill_execution.log]
+  tail[tail_skill_log]
+
+  skill --> stdout
+  skill --> log
+  log --> tail
+```
 
 Pipeline and tri→quad tools emit `[skill]` JSON lines to stdout (captured by MCP) and append to:
 
