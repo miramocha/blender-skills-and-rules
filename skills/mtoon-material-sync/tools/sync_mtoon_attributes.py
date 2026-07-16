@@ -3,18 +3,63 @@ Sync MToon 1.0 look attributes (rim + shading) across materials from a reference
 
 Run via MCP execute_blender_code or Blender Scripting workspace:
 
-    result = audit_mtoon_sync(reference_material="Face_00_SKIN (Instance)")
-    result = apply_mtoon_sync(reference_material="Face_00_SKIN (Instance)", dry_run=False)
+    result = audit_mtoon_sync(reference_material="Face.Skin")
+    result = apply_mtoon_sync(reference_material="Face.Skin", dry_run=False)
 """
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
 import bpy
 
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+_phase_b_resolve_fn: Optional[Callable[..., Any]] = None
+
+
+def _cleanup_tools_dir() -> Path:
+    """Prefer repo sibling cleanup tools with workflow resolver over stale home copy."""
+    candidates = [
+        SKILL_ROOT.parent / "vroid-vrm-blender-cleanup" / "tools",
+        Path.home() / ".cursor" / "skills" / "vroid-vrm-blender-cleanup" / "tools",
+    ]
+    for path in candidates:
+        script = path / "clean_vroid_material_names.py"
+        if not script.is_file():
+            continue
+        text = script.read_text(encoding="utf-8")
+        if "standardize_workflow_tail" in text and "resolve_material_by_token" in text:
+            return path
+    for path in candidates:
+        if (path / "clean_vroid_material_names.py").is_file():
+            return path
+    return candidates[0]
+
+
+def _phase_b_resolve_material(token: str) -> Optional[bpy.types.Material]:
+    """Delegate to vroid-vrm-blender-cleanup Phase B material resolver."""
+    global _phase_b_resolve_fn
+    path = _cleanup_tools_dir() / "clean_vroid_material_names.py"
+    if _phase_b_resolve_fn is None or getattr(_phase_b_resolve_fn, "__file__", "") != str(path):
+        import importlib.util
+
+        if not path.is_file():
+            return None
+        spec = importlib.util.spec_from_file_location("clean_vroid_material_names", path)
+        if spec is None or spec.loader is None:
+            return None
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        fn = getattr(mod, "resolve_material_by_token", None)
+        if not callable(fn):
+            return None
+        _phase_b_resolve_fn = fn
+        setattr(_phase_b_resolve_fn, "__file__", str(path))
+    return _phase_b_resolve_fn(token)
+
 MTOON_OUTPUT_NODE = "Mtoon1Material.Mtoon1Output"
-DEFAULT_REFERENCE_MATERIAL = "Face_00_SKIN (Instance)"
+DEFAULT_REFERENCE_MATERIAL = "Face.Skin"
 
 # Inputs copied for a consistent rim look (parametric values only; not texture links).
 RIM_INPUTS: Tuple[str, ...] = (
@@ -89,15 +134,42 @@ def _mtoon_output_node(mat: bpy.types.Material) -> Optional[bpy.types.Node]:
     return node
 
 
+def resolve_material_by_token(token: str) -> Optional[bpy.types.Material]:
+    """Phase B workflow/VRoid resolver first, then MToon substring fallback."""
+    if not token:
+        return None
+
+    mat = _phase_b_resolve_material(token)
+    if mat is not None:
+        return mat if _mtoon_output_node(mat) else None
+
+    candidates = [
+        m
+        for m in bpy.data.materials
+        if token in m.name
+        and _mtoon_output_node(m)
+        and not m.name.startswith("MToon Outline")
+    ]
+    if not candidates:
+        candidates = [
+            m for m in bpy.data.materials if token in m.name and _mtoon_output_node(m)
+        ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda m: (m.name != token, len(m.name), m.name))
+
+
 def _iter_target_materials(
     *,
     reference_material: str,
+    resolved_reference_name: Optional[str] = None,
     only_in_use: bool = True,
     include_outline: bool = False,
 ) -> List[bpy.types.Material]:
+    skip_name = resolved_reference_name or reference_material
     targets: List[bpy.types.Material] = []
     for mat in bpy.data.materials:
-        if mat.name == reference_material:
+        if mat.name == skip_name:
             continue
         if only_in_use and not mat.users:
             continue
@@ -128,9 +200,9 @@ def extract_mtoon_values(
     material_name: str,
     input_names: Sequence[str],
 ) -> Optional[dict]:
-    mat = bpy.data.materials.get(material_name)
+    mat = resolve_material_by_token(material_name)
     node = _mtoon_output_node(mat) if mat else None
-    if not node:
+    if not node or not mat:
         return None
 
     values: Dict[str, dict] = {}
@@ -141,7 +213,7 @@ def extract_mtoon_values(
             continue
         values[name] = _read_input_value(inp)
     return {
-        "material": material_name,
+        "material": mat.name,
         "values": values,
     }
 
@@ -182,13 +254,15 @@ def audit_mtoon_sync(
     if not ref_extract:
         return {
             "phase": "mtoon-sync-audit",
-            "error": f"reference material not found or has no {MTOON_OUTPUT_NODE}: {reference_material}",
+            "error": f"reference material not found or has no {MTOON_OUTPUT_NODE} (token: {reference_material})",
         }
 
     ref_values = ref_extract["values"]
+    resolved_reference = ref_extract["material"]
     rows: List[dict] = []
     for mat in _iter_target_materials(
         reference_material=reference_material,
+        resolved_reference_name=resolved_reference,
         only_in_use=only_in_use,
         include_outline=include_outline,
     ):
@@ -208,7 +282,8 @@ def audit_mtoon_sync(
     return {
         "phase": "mtoon-sync-audit",
         "dry_run": True,
-        "reference_material": reference_material,
+        "reference_material": resolved_reference,
+        "reference_token": reference_material,
         "groups": group_list,
         "input_names": input_names,
         "reference_values": ref_values,
@@ -217,6 +292,7 @@ def audit_mtoon_sync(
         "target_count": len(
             _iter_target_materials(
                 reference_material=reference_material,
+                resolved_reference_name=resolved_reference,
                 only_in_use=only_in_use,
                 include_outline=include_outline,
             )
@@ -280,11 +356,13 @@ def apply_mtoon_sync(
         return audit
 
     ref_values = audit["reference_values"]
+    resolved_reference = audit.get("reference_material", reference_material)
     updated: List[dict] = []
     skipped: List[dict] = []
 
     for mat in _iter_target_materials(
         reference_material=reference_material,
+        resolved_reference_name=resolved_reference,
         only_in_use=only_in_use,
         include_outline=include_outline,
     ):

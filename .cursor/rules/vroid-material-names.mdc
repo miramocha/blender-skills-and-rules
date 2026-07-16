@@ -1,0 +1,46 @@
+---
+description: VRoid material import names, Phase B workflow dot notation, and alias lookup
+alwaysApply: true
+---
+
+# VRoid material names
+
+## Source vs workflow
+
+| | Example |
+|---|---------|
+| **Source** (VRoid import, until Phase B) | `N00_000_00_Face_00_SKIN (Instance)` |
+| **Workflow** (pipeline scripts) | `Face.Skin` |
+
+Phase B stores `scene["vroid_material_rename_map"]` (`source → workflow`).
+
+## Standardization rule
+
+1. Strip `N{xx}_{xxx}_{slot}_` import prefix and ` (Instance)`
+2. VRoid `_00_` is a **category separator** → replace with `.` + Title Case
+3. `_00_FACE` category → `{Feature}.Face` (e.g. `FaceMouth` → `Mouth.Face`). `_00_EYE` → `{Feature}.Eye` (e.g. `EyeIris_00_EYE` → `Iris.Eye`, `EyeHighlight_00_EYE` → `EyeHighlight.Eye`). Other: `Face_00_SKIN` → `Face.Skin`
+4. Clothing `_01_CLOTH` → `{Item}.Cloth`; layered → `{ItemAlias}_{NN}.Cloth` (e.g. `Hoodie_01.Cloth`)
+
+## Workflow name table (this project)
+
+| Source tail | Workflow |
+|-------------|----------|
+| `Face_00_SKIN` | `Face.Skin` |
+| `Body_00_SKIN` | `Body.Skin` |
+| `FaceMouth_00_FACE` | `Mouth.Face` |
+| `FaceBrow_00_FACE` | `Brow.Face` |
+| `FaceEyelash_00_FACE` | `Eyelash.Face` |
+| `FaceEyeline_00_FACE` | `Eyeline.Face` |
+| `EyeIris_00_EYE` | `Iris.Eye` |
+| `EyeHighlight_00_EYE` | `EyeHighlight.Eye` |
+| `EyeWhite_00_EYE` | `EyeWhite.Eye` |
+| `HairBack_00_HAIR` | `Hair.Back` |
+| `Hair_00_HAIR_{NN}` | `Hair.{NN}` |
+| `Shoes_01_CLOTH` | `Shoes.Cloth` |
+| `Tops_01_CLOTH_{NN}` | `Hoodie_{NN}.Cloth` |
+
+## Lookup
+
+Use `resolve_material_by_token("Face.Skin")` from `clean_vroid_material_names.py` — accepts workflow token, VRoid tail, or full import name.
+
+Texture slugs: dots → underscores (`Face.Skin` → `face_skin`).

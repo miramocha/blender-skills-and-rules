@@ -1,0 +1,14 @@
+{
+  "profile": "eyebrow",
+  "label": "VRoid eyebrow face UV (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/eyebrow-quad-dissolve.csv",
+  "material_token": "Brow.Face",
+  "notes": "Brow-only UV (Brow.Face slot). Source eyebrow (tris) → result eyebrow.quad. Skips if map CSV missing or empty.",
+  "reference": {
+    "source_object": "eyebrow",
+    "result_object": "eyebrow.quad"
+  }
+}

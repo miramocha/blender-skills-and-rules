@@ -1,0 +1,14 @@
+{
+  "profile": "iris",
+  "label": "VRoid iris eye UV (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/iris-quad-dissolve.csv",
+  "material_token": "Iris.Eye",
+  "notes": "Iris-only UV (Iris.Eye slot). Source Iris (tris) → result Iris.Quad. Skips if map CSV missing or empty.",
+  "reference": {
+    "source_object": "Iris",
+    "result_object": "Iris.Quad"
+  }
+}

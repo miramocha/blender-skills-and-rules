@@ -43,7 +43,7 @@ result = run_full_pipeline(
 | E | All Face shape key values zeroed |
 | B rescan (ARKit) | `.001` ARKit duplicate materials cleaned |
 | C cleanup (ARKit) | 13 legacy `.001` textures merged → canonical images, datablocks purged |
-| J | Rim + Shading Toony synced from `Face_00_SKIN (Instance)`; Shading Shift unchanged |
+| J | Rim + Shading Toony synced from material containing `Face.Skin`; Shading Shift unchanged |
 | F | 57 `Fcl_*` → `vroid*`; 14 VRM expression binds updated |
 | G | 78 bones remapped; hair mirror pass applied |
 | H | 44 collider Empties + 22 `collider_display_name` entries |
@@ -118,27 +118,35 @@ result = run_phase_a(armature_object_name="Armature", dry_run=False)
 
 ## Phase B — Material names
 
-| Before | After |
-|--------|-------|
-| `N00_006_01_Shoes_01_CLOTH (Instance)` | `Shoes_01_CLOTH (Instance)` |
-| `N00_000_01_Body_00_SKIN (Instance)` | `Body_00_SKIN (Instance)` |
-| `MToon Outline (N00_000_Hair_00_HAIR_01 (Instance))` | `MToon Outline (Hair_00_HAIR_01 (Instance))` |
+| Source (VRoid import) | Workflow name |
+|-----------------------|---------------|
+| `N00_000_00_Face_00_SKIN (Instance)` | `Face.Skin` |
+| `N00_000_00_Body_00_SKIN (Instance)` | `Body.Skin` |
+| `N00_005_01_Tops_01_CLOTH (Instance)` | `Hoodie.Cloth` |
+| `N00_005_01_Tops_01_CLOTH_01 (Instance)` | `Hoodie_01.Cloth` |
+| `N00_005_01_Tops_01_CLOTH_02 (Instance)` | `Hoodie_02.Cloth` |
+| `N00_000_00_FaceMouth_00_FACE (Instance)` | `Mouth.Face` |
+| `N00_000_00_FaceBrow_00_FACE (Instance)` | `Brow.Face` |
+| `N00_000_Hair_00_HAIR_01 (Instance)` | `Hair.01` |
+| `N00_001_01_Shoes_01_CLOTH (Instance)` | `Shoes.Cloth` |
+| `N00_001_02_Vest_01_CLOTH (Instance)` | `Vest.Cloth` (uniform vest slot `N00_001_02_`) |
+| `MToon Outline (N00_000_Hair_00_HAIR_01 (Instance))` | `MToon Outline (Hair.01)` |
 
 ## Phase C — Material slugs (MToon textures)
 
 | Material name | Slug |
 |---------------|------|
-| `Body_00_SKIN (Instance)` | `body_00_skin` |
-| `MToon Outline (Face_00_SKIN (Instance))` | `outline_face_00_skin` |
+| `Body.Skin` | `body_skin` |
+| `MToon Outline (Face.Skin)` | `outline_face_skin` |
 
 ### Per-material textures
 
-Material `Body_00_SKIN (Instance)` after Phase B:
+Material `Body.Skin` after Phase B:
 
 | Old image stem | Slot | New name |
 |----------------|------|----------|
-| `..._10` (shared lit + shade) | base + shade | `body_00_skin_base` |
-| `..._11` | normal | `body_00_skin_normal` |
+| `..._10` (shared lit + shade) | base + shade | `body_skin_base` |
+| `..._11` | normal | `body_skin_normal` |
 
 ### Global placeholders
 

@@ -40,10 +40,78 @@ Run first, before material or texture cleanup. Tool: [tools/vrm_bones_rename.py]
 
 | Pattern | Example removed |
 |---------|-----------------|
-| `N\d{2}_\d{3}_\d{2}_` | `N00_006_01_`, `N00_000_01_` |
+| `N\d{2}_\d{3}_\d{2}_` | `N00_006_01_`, `N00_005_01_` (tops), `N00_001_02_` (uniform vest) |
 | `N\d{2}_\d{3}_[A-Za-z]+_\d{2}_` | `N00_000_Hair_00_` |
 
-Phase B **does not** strip ` (Instance)` from material names. Phase C `material_slug()` strips it when computing texture names.
+Phase B also strips trailing ` (Instance)` from material names (outline materials: inner name only, wrapper kept).
+
+**Source vs workflow:** VRoid import keeps the **source** datablock name (e.g. `N00_000_00_Face_00_SKIN (Instance)`). Phase B renames it to the **workflow** name (`Face.Skin`). The source string is never what VRoid “should” be called in our pipeline — only the workflow name is used after cleanup. `scene["vroid_material_rename_map"]` records `source → workflow` for lookup.
+
+Example: `N00_000_00_Face_00_SKIN (Instance)` → **`Face.Skin`**.
+
+Downstream tools use the **workflow** token `Face.Skin`. `resolve_material_by_token()` still finds the mat if Phase B has not run yet (source / VRoid tail aliases).
+
+## Face skin naming (mesh data vs material)
+
+| | Source (VRoid import) | Workflow (after Phase B) |
+|---|----------------------|--------------------------|
+| **Material** | `N00_000_00_Face_00_SKIN (Instance)` | **`Face.Skin`** |
+| **Body material** | `N00_000_00_Body_00_SKIN (Instance)` | **`Body.Skin`** |
+| **Mesh datablock** (face skin UV only) | e.g. `Face (merged)` on multi-slot Face object | **`Face.Skin`** when split for skin-only work |
+| **Lookup token** | — | **`Face.Skin`** (aliases resolve source names too) |
+
+On import the Face **object** keeps multiple material slots (eyes, brow, skin, …). Slot cleanup and per-material mesh splits are separate steps.
+
+## Workflow dot notation (Phase B standardize)
+
+VRoid `_00_` is a **category separator**. Phase B converts tails to `{Region}.{Part}` with Title Case:
+
+| VRoid tail | Workflow |
+|------------|----------|
+| `Face_00_SKIN` | `Face.Skin` |
+| `Body_00_SKIN` | `Body.Skin` |
+| `FaceMouth_00_FACE` | `Mouth.Face` |
+| `FaceBrow_00_FACE` | `Brow.Face` |
+| `EyeIris_00_EYE` | `Iris.Eye` |
+| `EyeHighlight_00_EYE` | `EyeHighlight.Eye` |
+| `EyeWhite_00_EYE` | `EyeWhite.Eye` |
+| `HairBack_00_HAIR` | `Hair.Back` |
+| `Hair_00_HAIR_01` | `Hair.01` |
+| `Shoes_01_CLOTH` | `Shoes.Cloth` |
+| `Tops_01_CLOTH_01` | `Hoodie_01.Cloth` |
+| `Tops_01_CLOTH_02` | `Hoodie_02.Cloth` |
+| `Shoes_01_CLOTH` | `Shoes.Cloth` |
+
+Texture slugs lowercase and replace `.` with `_` (`Face.Skin` → `face_skin`).
+
+## VRoid clothing material names
+
+VRoid encodes outfit slot in the numeric prefix `N{xx}_{###}_{##}_` (stripped by Phase B). The **tail** after the prefix is kept, including layer suffixes.
+
+| VRoid import (before Phase B) | After Phase B | Notes |
+|-------------------------------|---------------|-------|
+| `N00_005_01_Tops_01_CLOTH (Instance)` | `Hoodie` | Single hoodie layer |
+| `N00_005_01_Tops_01_CLOTH_01 (Instance)` | `Hoodie_01.Cloth` | Hoodie layer 1 |
+| `N00_005_01_Tops_01_CLOTH_02 (Instance)` | `Hoodie_02.Cloth` | Hoodie layer 2 |
+| `N00_001_02_*_CLOTH (Instance)` | `*_CLOTH` | Outfit slot `N00_001_02_` — uniform **vest** on many models |
+
+**Layer rule:** stacked hoodie layers → `Hoodie_01.Cloth`, `Hoodie_02.Cloth`, …
+
+### Rename alias map (Phase B → downstream)
+
+Phase B writes a JSON map on the Blender scene: `scene["vroid_material_rename_map"]` = `{ "import_name": "cleaned_name", … }`.
+
+Downstream skills (tri-to-quad UV map, material-slot mesh extraction, MToon sync) must resolve materials with **`resolve_material_by_token()`** / **`material_name_variants()`** so lookups work on **source and workflow** names:
+
+- **source:** `N00_000_00_Face_00_SKIN (Instance)` (VRoid import — unchanged until Phase B)
+- **workflow:** `Face.Skin` (use this in pipeline scripts and profiles)
+
+```python
+from clean_vroid_material_names import resolve_material_by_token, material_name_variants
+
+mat = resolve_material_by_token("Face.Skin")  # workflow name; also finds source if Phase B not run
+variants = material_name_variants("Face.Skin")
+```
 
 ## Phase C — Find MToon materials
 
@@ -68,8 +136,8 @@ Skip slots with no image assigned. Empty rim / outline / matcap slots are normal
 ## Material slug rules
 
 1. Remove ` (Instance)` for slug computation only.
-2. `MToon Outline (Face_00_SKIN (Instance))` → `outline_face_00_skin`
-3. Otherwise lowercase material name: `Body_00_SKIN` → `body_00_skin`
+2. `MToon Outline (Face.Skin)` → `outline_face_skin`
+3. Otherwise lowercase material name: `Body.Skin` → `body_skin`
 
 Per-material unique textures: `{material_slug}_{suffix}.png`
 
@@ -121,7 +189,7 @@ Rename once; all materials keep pointing at the same image.
 | Case | Policy |
 |------|--------|
 | Lit + shade same PNG | One `base` rename; both nodes keep same image |
-| Outline mat shares parent textures | Same target as parent (`face_00_skin_base`), not `outline_*`, via filepath dedupe + non-outline preference |
+| Outline mat shares parent textures | Same target as parent (`face_skin_base`), not `outline_*`, via filepath dedupe + non-outline preference |
 | Empty texture slots | Skip |
 | Name collision | Append numeric suffix (`_02`) + report |
 | Files outside `//textures/` | Report in dry-run; datablock-only default |

@@ -1,0 +1,14 @@
+{
+  "profile": "eyehighlight",
+  "label": "VRoid eye highlight eye UV (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/eyehighlight-quad-dissolve.csv",
+  "material_token": "EyeHighlight.Eye",
+  "notes": "EyeHighlight-only UV (EyeHighlight.Eye slot). Source EyeHighlight (tris) → result EyeHighlight.Quad. Skips if map CSV missing or empty.",
+  "reference": {
+    "source_object": "EyeHighlight",
+    "result_object": "EyeHighlight.Quad"
+  }
+}

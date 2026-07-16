@@ -64,7 +64,7 @@ def material_slug(name: str) -> str:
     if outline_match:
         inner = outline_match.group(1).replace(" (Instance)", "")
         return "outline_" + inner.lower()
-    return name.lower()
+    return name.lower().replace(".", "_")
 
 
 def is_outline_material(name: str) -> bool:

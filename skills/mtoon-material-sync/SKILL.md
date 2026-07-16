@@ -23,7 +23,7 @@ Related: [vroid-vrm-blender-cleanup](../vroid-vrm-blender-cleanup/SKILL.md) **Ph
 ## Before changing anything
 
 1. **Blender open** with target `.blend` loaded; MCP connected.
-2. **Pick reference material** — default `Face_00_SKIN (Instance)` unless user names another.
+2. **Pick reference material** — default token `Face.Skin` (matches any material name containing that string) unless user names another.
 3. **Dry-run → show diff table → user approval → apply → verify**.
 
 Use AskQuestion when reference material is unclear or user wants outline materials included.
@@ -70,10 +70,10 @@ SKILL_TOOLS = os.path.join(
 exec(open(os.path.join(SKILL_TOOLS, "sync_mtoon_attributes.py"), encoding="utf-8").read())
 
 # Audit only
-result = audit_mtoon_sync(reference_material="Face_00_SKIN (Instance)")
+result = audit_mtoon_sync(reference_material="Face.Skin")
 
 # After approval
-result = apply_mtoon_sync(reference_material="Face_00_SKIN (Instance)", dry_run=False)
+result = apply_mtoon_sync(reference_material="Face.Skin", dry_run=False)
 ```
 
 ### Options
@@ -86,7 +86,7 @@ result = apply_mtoon_sync(groups=["rim"], dry_run=False)
 result = apply_mtoon_sync(include_outline=True, dry_run=False)
 
 # Different reference
-result = apply_mtoon_sync(reference_material="Body_00_SKIN (Instance)", dry_run=False)
+result = apply_mtoon_sync(reference_material="Body.Skin", dry_run=False)
 ```
 
 ### Override single value after sync
@@ -103,7 +103,7 @@ Included automatically when running `run_full_pipeline()` from **vroid-vrm-blend
 
 ```python
 result = run_full_pipeline(
-    reference_material="Face_00_SKIN (Instance)",
+    reference_material="Face.Skin",
     dry_run=False,
 )
 # result["phases"]["J"] — materials_needing_sync / updated_count

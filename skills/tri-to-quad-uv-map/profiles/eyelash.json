@@ -1,0 +1,14 @@
+{
+  "profile": "eyelash",
+  "label": "VRoid eyelash face UV (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/eyelash-quad-dissolve.csv",
+  "material_token": "Eyelash.Face",
+  "notes": "Eyelash-only UV (Eyelash.Face slot). Source Eyelash (tris) → result Eyelash.Quad. Skips if map CSV missing or empty.",
+  "reference": {
+    "source_object": "Eyelash",
+    "result_object": "Eyelash.Quad"
+  }
+}

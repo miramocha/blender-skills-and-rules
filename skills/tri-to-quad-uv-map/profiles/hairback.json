@@ -1,0 +1,14 @@
+{
+  "profile": "hairback",
+  "label": "VRoid hair back body UV (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/hairback-quad-dissolve.csv",
+  "material_token": "Hair.Back",
+  "notes": "Hair.Back slot on Body mesh (same body UV atlas). Source HairBack (tris) → result HairBack.Quad. Skips if map CSV missing or empty.",
+  "reference": {
+    "source_object": "HairBack",
+    "result_object": "HairBack.Quad"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "profile": "body",
+  "label": "VRoid body skin UV (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/body-quad-dissolve.csv",
+  "material_token": "Body.Skin",
+  "notes": "Body.Skin slot on Body mesh. Auto-picks default vs socks feet map by UV fit dry-run.",
+  "reference": {
+    "source_object": "Body",
+    "result_object": "Body.Quad"
+  },
+  "map_variants": [
+    {
+      "id": "default",
+      "label": "Default feet (reference body)",
+      "map_file": "maps/body-quad-dissolve.csv"
+    },
+    {
+      "id": "socks",
+      "label": "Socks / alternate feet",
+      "map_file": "maps/body-socks-quad-dissolve.csv"
+    }
+  ]
+}
