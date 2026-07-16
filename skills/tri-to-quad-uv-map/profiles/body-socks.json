@@ -1,0 +1,14 @@
+{
+  "profile": "body-socks",
+  "label": "VRoid body skin UV — socks feet variant",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/body-socks-quad-dissolve.csv",
+  "material_token": "Body.Skin",
+  "notes": "Body.Skin with socks/alternate feet UV. Source Body.001 (tris) → result Body.Quad.",
+  "reference": {
+    "source_object": "Body.001",
+    "result_object": "Body.Quad"
+  }
+}

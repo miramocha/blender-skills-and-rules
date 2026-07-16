@@ -1,0 +1,19 @@
+{
+  "profile": "default",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "u_center": null,
+  "assign_vertex_groups": true,
+  "vertex_groups": {
+    "left_quad": "TriQuad.Left.Quad",
+    "left_tri": "TriQuad.Left.Tri",
+    "right_quad": "TriQuad.Right.Quad",
+    "right_tri": "TriQuad.Right.Tri",
+    "left": "TriQuad.Left",
+    "right": "TriQuad.Right",
+    "center": "TriQuad.Center",
+    "mismatch": "TriQuad.Mismatch",
+    "mismatch_left": "TriQuad.Mismatch.Left",
+    "mismatch_right": "TriQuad.Mismatch.Right"
+  }
+}

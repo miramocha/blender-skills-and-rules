@@ -92,3 +92,7 @@ tq.apply_profile("hairback", target_obj="Body", dry_run=False)
 ```
 
 Requires **vroid-vrm-blender-cleanup** Phase B tools for name resolution (`N00_…_Face_00_SKIN` → `Face.Skin`, `N00_…_HairBack_00_HAIR` → `Hair.Back`).
+
+## Verify symmetry
+
+After apply, run [uv-topology-symmetry](../uv-topology-symmetry/SKILL.md) — assigns `TriQuad.Mismatch` for faces without a UV mirror partner.
