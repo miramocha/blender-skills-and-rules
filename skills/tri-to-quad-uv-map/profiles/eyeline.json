@@ -1,0 +1,14 @@
+{
+  "profile": "eyeline",
+  "label": "VRoid eyeline face UV (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/eyeline-quad-dissolve.csv",
+  "material_token": "Eyeline.Face",
+  "notes": "Eyeline-only UV (Eyeline.Face slot). Source Eyeline (tris) → result Eyeline.Quad. Skips if map CSV missing or empty.",
+  "reference": {
+    "source_object": "Eyeline",
+    "result_object": "Eyeline.Quad"
+  }
+}

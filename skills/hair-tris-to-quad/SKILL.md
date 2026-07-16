@@ -10,8 +10,9 @@ description: >-
 
 ## When to use
 
-- Full **`Hair`** mesh (or merged hair objects) still triangulated after import
-- **Not** [tri-to-quad-uv-map](../tri-to-quad-uv-map/SKILL.md) — face/mouth/body use fixed UV CSV dissolve maps
+- Full **`Hair`** mesh (strand layers `Hair.{NN}`) still triangulated after import
+- **Not** `Hair.Back` — that is a **`Body` material slot** (fixed body UV atlas). Use [tri-to-quad-uv-map](../tri-to-quad-uv-map/SKILL.md) profile `hairback` on `Body` instead
+- **Not** face/mouth/eye slots — those use fixed UV CSV dissolve maps in tri-to-quad-uv-map
 
 ## Method
 
