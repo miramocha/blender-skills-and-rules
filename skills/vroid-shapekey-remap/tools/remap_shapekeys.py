@@ -145,132 +145,226 @@ def _armature_vrm_extension(armature_object_name: str) -> tuple:
     return ext, None
 
 
+BIND_SHAPE_KEY_FIELDS = ("index", "shape_key_name")
+
+
 def _remap_bind_shape_key_ref(value: Optional[str], mapping: Dict[str, str]) -> Optional[str]:
     if not value or not isinstance(value, str):
         return None
     return mapping.get(value)
 
 
+def _resolve_bind_shape_key_name(
+    old: Optional[str],
+    mapping: Optional[Dict[str, str]],
+) -> Optional[str]:
+    if not isinstance(old, str) or not old:
+        return None
+    if mapping and old in mapping:
+        return mapping[old]
+    if old.startswith("Fcl_"):
+        return convert_fcl_shape_key(old)
+    return None
+
+
+def _iter_bind_shape_key_fields(bind) -> List[Tuple[str, str]]:
+    refs: List[Tuple[str, str]] = []
+    for field in BIND_SHAPE_KEY_FIELDS:
+        if not hasattr(bind, field):
+            continue
+        old = getattr(bind, field, None)
+        if isinstance(old, str) and old:
+            refs.append((field, old))
+    return refs
+
+
+def _bind_mesh_object_name(bind) -> Optional[str]:
+    node = getattr(bind, "node", None)
+    if node is not None:
+        return getattr(node, "mesh_object_name", None) or getattr(node, "name", None) or None
+    mesh = getattr(bind, "mesh", None)
+    if mesh is not None:
+        return getattr(mesh, "mesh_object_name", None) or getattr(mesh, "name", None) or None
+    mesh_name = getattr(bind, "mesh_name", None)
+    return mesh_name if isinstance(mesh_name, str) and mesh_name else None
+
+
+def _sync_bind_mesh_object(bind, mesh_object_name: str) -> bool:
+    if not mesh_object_name:
+        return False
+    node = getattr(bind, "node", None)
+    if node is not None and hasattr(node, "mesh_object_name"):
+        if node.mesh_object_name == mesh_object_name:
+            return False
+        node.mesh_object_name = mesh_object_name
+        return True
+    mesh = getattr(bind, "mesh", None)
+    if mesh is not None and hasattr(mesh, "mesh_object_name"):
+        if mesh.mesh_object_name == mesh_object_name:
+            return False
+        mesh.mesh_object_name = mesh_object_name
+        return True
+    if hasattr(bind, "mesh_name"):
+        if bind.mesh_name == mesh_object_name:
+            return False
+        bind.mesh_name = mesh_object_name
+        return True
+    return False
+
+
+def _shape_key_exists_on_mesh(mesh_object_name: Optional[str], key_name: Optional[str]) -> bool:
+    if not mesh_object_name or not key_name:
+        return False
+    obj = bpy.data.objects.get(mesh_object_name)
+    if not obj or not obj.data or not obj.data.shape_keys:
+        return False
+    return key_name in obj.data.shape_keys.key_blocks
+
+
 def audit_vrm_expression_binds(
     armature_object_name: str = "Armature",
     mapping: Optional[Dict[str, str]] = None,
+    face_mesh_object_name: Optional[str] = None,
 ) -> dict:
-    """Dry-run: find VRM0/VRM1 expression binds still using old Fcl_* shape key names."""
+    """Dry-run: find VRM0/VRM1 expression binds with stale shape key names or mesh refs."""
     ext, err = _armature_vrm_extension(armature_object_name)
     if err:
         return err
 
     stale: List[dict] = []
     planned: List[dict] = []
+    mesh_mismatches: List[dict] = []
+
+    def _audit_bind(
+        *,
+        vrm: str,
+        expression: str,
+        bind,
+    ) -> None:
+        mesh_name = _bind_mesh_object_name(bind)
+        target_mesh = face_mesh_object_name or mesh_name
+        if face_mesh_object_name and mesh_name != face_mesh_object_name:
+            mesh_row = {
+                "vrm": vrm,
+                "expression": expression,
+                "field": "mesh_object_name",
+                "old": mesh_name,
+                "new": face_mesh_object_name,
+            }
+            mesh_mismatches.append(mesh_row)
+            planned.append(mesh_row)
+
+        for field, old in _iter_bind_shape_key_fields(bind):
+            new = _resolve_bind_shape_key_name(old, mapping)
+            key_missing = target_mesh and not _shape_key_exists_on_mesh(target_mesh, old)
+            if not new and not key_missing:
+                continue
+            row = {
+                "vrm": vrm,
+                "expression": expression,
+                "field": field,
+                "old": old,
+                "new": new,
+                "mesh_object_name": mesh_name,
+                "key_missing_on_mesh": key_missing,
+            }
+            stale.append(row)
+            if new and new != old:
+                planned.append(row)
 
     vrm0 = getattr(ext, "vrm0", None)
     if vrm0 and getattr(vrm0, "blend_shape_master", None):
         for group in vrm0.blend_shape_master.blend_shape_groups:
             for bind in group.binds:
-                for field in ("index", "shape_key_name"):
-                    old = getattr(bind, field, None)
-                    if not isinstance(old, str) or not old.startswith("Fcl_"):
-                        continue
-                    new = mapping.get(old) if mapping else convert_fcl_shape_key(old)
-                    row = {
-                        "vrm": "vrm0",
-                        "expression": group.name,
-                        "field": field,
-                        "old": old,
-                        "new": new,
-                    }
-                    stale.append(row)
-                    if new and new != old:
-                        planned.append(row)
+                _audit_bind(vrm="vrm0", expression=group.name, bind=bind)
 
     vrm1_exprs = getattr(getattr(ext, "vrm1", None), "expressions", None)
     if vrm1_exprs and hasattr(vrm1_exprs, "all_name_to_expression_dict"):
         for expr_name, expr in vrm1_exprs.all_name_to_expression_dict().items():
             for bind in getattr(expr, "morph_target_binds", []):
-                old = getattr(bind, "shape_key_name", None)
-                if not isinstance(old, str) or not old.startswith("Fcl_"):
-                    continue
-                new = mapping.get(old) if mapping else convert_fcl_shape_key(old)
-                row = {
-                    "vrm": "vrm1",
-                    "expression": expr_name,
-                    "field": "shape_key_name",
-                    "old": old,
-                    "new": new,
-                }
-                stale.append(row)
-                if new and new != old:
-                    planned.append(row)
+                _audit_bind(vrm="vrm1", expression=expr_name, bind=bind)
 
     return {
         "phase": "vrm-expression-audit",
         "armature": armature_object_name,
+        "face_mesh_object_name": face_mesh_object_name,
         "stale_count": len(stale),
         "planned_count": len(planned),
+        "mesh_mismatch_count": len(mesh_mismatches),
         "stale": stale,
         "planned": planned,
+        "mesh_mismatches": mesh_mismatches,
     }
 
 
 def apply_vrm_expression_bind_renames(
     mapping: Dict[str, str],
     armature_object_name: str = "Armature",
+    face_mesh_object_name: Optional[str] = None,
 ) -> dict:
-    """Rewrite VRM expression morph binds from Fcl_* to vroid* using a rename mapping."""
+    """Rewrite VRM expression morph binds from Fcl_* to vroid* and sync mesh object refs."""
     ext, err = _armature_vrm_extension(armature_object_name)
     if err:
         return err
 
     renamed: List[dict] = []
+    mesh_synced: List[dict] = []
+
+    def _apply_bind(*, vrm: str, expression: str, bind) -> None:
+        if face_mesh_object_name:
+            old_mesh = _bind_mesh_object_name(bind)
+            if _sync_bind_mesh_object(bind, face_mesh_object_name):
+                mesh_synced.append(
+                    {
+                        "vrm": vrm,
+                        "expression": expression,
+                        "field": "mesh_object_name",
+                        "old": old_mesh,
+                        "new": face_mesh_object_name,
+                    }
+                )
+        for field, old in _iter_bind_shape_key_fields(bind):
+            new = _remap_bind_shape_key_ref(old, mapping)
+            if not new:
+                continue
+            setattr(bind, field, new)
+            renamed.append(
+                {
+                    "vrm": vrm,
+                    "expression": expression,
+                    "field": field,
+                    "old": old,
+                    "new": new,
+                }
+            )
 
     vrm0 = getattr(ext, "vrm0", None)
     if vrm0 and getattr(vrm0, "blend_shape_master", None):
         for group in vrm0.blend_shape_master.blend_shape_groups:
             for bind in group.binds:
-                for field in ("index", "shape_key_name"):
-                    old = getattr(bind, field, None)
-                    new = _remap_bind_shape_key_ref(old, mapping)
-                    if new:
-                        setattr(bind, field, new)
-                        renamed.append(
-                            {
-                                "vrm": "vrm0",
-                                "expression": group.name,
-                                "field": field,
-                                "old": old,
-                                "new": new,
-                            }
-                        )
+                _apply_bind(vrm="vrm0", expression=group.name, bind=bind)
 
     vrm1_exprs = getattr(getattr(ext, "vrm1", None), "expressions", None)
     if vrm1_exprs and hasattr(vrm1_exprs, "all_name_to_expression_dict"):
         for expr_name, expr in vrm1_exprs.all_name_to_expression_dict().items():
             for bind in getattr(expr, "morph_target_binds", []):
-                old = getattr(bind, "shape_key_name", None)
-                new = _remap_bind_shape_key_ref(old, mapping)
-                if new:
-                    bind.shape_key_name = new
-                    renamed.append(
-                        {
-                            "vrm": "vrm1",
-                            "expression": expr_name,
-                            "field": "shape_key_name",
-                            "old": old,
-                            "new": new,
-                        }
-                    )
+                _apply_bind(vrm="vrm1", expression=expr_name, bind=bind)
 
     return {
         "phase": "vrm-expression-apply",
         "armature": armature_object_name,
+        "face_mesh_object_name": face_mesh_object_name,
         "renamed_count": len(renamed),
+        "mesh_synced_count": len(mesh_synced),
         "renamed": renamed,
+        "mesh_synced": mesh_synced,
     }
 
 
 def fix_vrm_expression_binds_after_fcl_rename(
     armature_object_name: str = "Armature",
     mapping: Optional[Dict[str, str]] = None,
+    face_mesh_object_name: Optional[str] = None,
     dry_run: bool = True,
 ) -> dict:
     """
@@ -280,6 +374,7 @@ def fix_vrm_expression_binds_after_fcl_rename(
     audit = audit_vrm_expression_binds(
         armature_object_name=armature_object_name,
         mapping=mapping,
+        face_mesh_object_name=face_mesh_object_name,
     )
     if audit.get("error"):
         return audit
@@ -290,15 +385,18 @@ def fix_vrm_expression_binds_after_fcl_rename(
     apply_result = apply_vrm_expression_bind_renames(
         mapping=effective_mapping,
         armature_object_name=armature_object_name,
+        face_mesh_object_name=face_mesh_object_name,
     )
     verify = audit_vrm_expression_binds(
         armature_object_name=armature_object_name,
         mapping=effective_mapping,
+        face_mesh_object_name=face_mesh_object_name,
     )
     return {
         **audit,
         **apply_result,
         "verify_stale_count": verify.get("stale_count", 0),
+        "verify_mesh_mismatch_count": verify.get("mesh_mismatch_count", 0),
     }
 
 
@@ -321,6 +419,7 @@ def remap_object_fcl_keys(
         vrm_audit = audit_vrm_expression_binds(
             armature_object_name=armature_object_name,
             mapping=mapping,
+            face_mesh_object_name=object_name,
         )
         return {**report, "vrm_expression_audit": vrm_audit}
     apply_result = apply_shape_key_mapping(obj, mapping)
@@ -329,6 +428,7 @@ def remap_object_fcl_keys(
         result["vrm_expression_fix"] = fix_vrm_expression_binds_after_fcl_rename(
             armature_object_name=armature_object_name,
             mapping=mapping,
+            face_mesh_object_name=object_name,
             dry_run=False,
         )
     return result
