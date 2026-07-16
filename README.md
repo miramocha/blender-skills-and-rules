@@ -38,13 +38,13 @@ Viewport captures from a full **female** cleanup + tri→quad run (Front Orthogr
 | Stage | Screenshot |
 |-------|------------|
 | After cleanup (wireframe) | ![After cleanup — wireframe](docs/images/vroid-pipeline-after-cleanup-wireframe-front-ortho.png) |
-| After cleanup (shaded, Face selected) | ![After cleanup — shaded](docs/images/vroid-pipeline-after-cleanup-shaded-face-selected.png) |
+| After cleanup (shaded, front ortho) | ![After cleanup — shaded](docs/images/vroid-pipeline-after-cleanup-shaded-front-ortho.png) |
 | After tri→quad (shaded + wireframe) | ![After tri→quad](docs/images/vroid-pipeline-after-tris-to-quad-shaded-front-ortho.png) |
 
 Files:
 
 - [`docs/images/vroid-pipeline-after-cleanup-wireframe-front-ortho.png`](docs/images/vroid-pipeline-after-cleanup-wireframe-front-ortho.png)
-- [`docs/images/vroid-pipeline-after-cleanup-shaded-face-selected.png`](docs/images/vroid-pipeline-after-cleanup-shaded-face-selected.png)
+- [`docs/images/vroid-pipeline-after-cleanup-shaded-front-ortho.png`](docs/images/vroid-pipeline-after-cleanup-shaded-front-ortho.png)
 - [`docs/images/vroid-pipeline-after-tris-to-quad-shaded-front-ortho.png`](docs/images/vroid-pipeline-after-tris-to-quad-shaded-front-ortho.png)
 
 ## Requirements
