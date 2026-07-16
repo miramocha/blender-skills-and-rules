@@ -63,6 +63,7 @@ if result.get("skipped"):
     print(result["reason"])  # map_not_found | empty_map | material_not_on_object | ...
 
 result = tq.apply_profile("face", target_obj="Face", dry_run=False)
+# result["elapsed_ms"] — profile wall time; see blender-skill-log skill_execution.log
 ```
 
 ## Skip reasons
@@ -75,6 +76,8 @@ result = tq.apply_profile("face", target_obj="Face", dry_run=False)
 | `material_not_on_object` | Material exists but not assigned to target mesh |
 | `mesh_object_not_found` | Invalid target object |
 | `material_resolver_unavailable` | Phase B cleanup tools not on disk |
+| `material_not_found` | Token not in scene — re-run Phase B workflow rename or check slot assignment |
+| `shape_keys_addon_unavailable` | Mesh has shape keys but **Apply Modifiers With Shape Keys** addon not enabled |
 
 ## Material filter
 
@@ -92,6 +95,63 @@ tq.apply_profile("hairback", target_obj="Body", dry_run=False)
 ```
 
 Requires **vroid-vrm-blender-cleanup** Phase B tools for name resolution (`N00_…_Face_00_SKIN` → `Face.Skin`, `N00_…_HairBack_00_HAIR` → `Hair.Back`).
+
+## Workflow (after separate-by-material)
+
+1. **Duplicate** target mesh (`{Object}.NormalSrc`, hidden) — pre-tri topology for normals
+2. **Apply** tri→quad dissolve map (`apply_profile`)
+3. **Data Transfer** face-corner custom normals from duplicate → result  
+   - Mapping: **Nearest Corner of Nearest Face** (`POLYINTERP_NEAREST`)
+4. **Apply** modifier (stock `modifier_apply`, or shape-key-safe addon when needed)
+5. **Cleanup** duplicate: delete, or if target has shape keys and transfer succeeded → rename to **`{Object}.old`**, hide viewport + render
+
+Enabled by default (`transfer_normals=True`). Skipped when:
+
+| `normal_transfer.reason` | Meaning |
+|--------------------------|---------|
+| `shape_keys_addon_unavailable` | Target has shape keys but **Apply Modifiers With Shape Keys** addon is not enabled |
+| `addon_unavailable` | Same — operator `object.apply_modifiers_with_shape_keys` missing |
+| `dry_run` | Audit only |
+| `no_dissolves_applied` | Map matched nothing |
+| `disabled` | `transfer_normals=False` |
+| `transfer_failed` | Data Transfer or addon apply raised an error |
+
+### Shape keys + normal transfer
+
+When the target mesh has shape keys (e.g. full `Face` before per-slot split), normal transfer uses the third-party addon operator:
+
+```python
+bpy.ops.object.apply_modifiers_with_shape_keys(
+    collection_property=[
+        {"name": "TriQuad.NormalTransfer", "apply_modifier": True},
+        {"name": "Armature", "apply_modifier": False},
+    ]
+)
+```
+
+Dependency check:
+
+```python
+import tri_to_quad_uv_map as tq
+tq.shape_keys_modifier_apply_available()  # hasattr(bpy.ops.object, "apply_modifiers_with_shape_keys")
+```
+
+Install **Apply Modifiers With Shape Keys** from Blender Extensions (or equivalent) and enable it before running tri→quad on shape-key meshes.
+
+Meshes **without** shape keys still use stock `bpy.ops.object.modifier_apply` and **delete** the normal-source duplicate.
+
+When the target has shape keys and normal transfer succeeds, the pre-topology duplicate is kept as a hidden **`Face.old`** (or `{target}.old`) object — tri topology + original shape keys for reference/recovery. **One archive per target**; later profiles reuse existing `Face.old` and delete their normal-source duplicate.
+
+```python
+# Default: dissolve + normal transfer (Body.only, no shape keys)
+tq.apply_profile("body", target_obj="Body.only", dry_run=False)
+
+# Face with ARKit shape keys — normal transfer when addon enabled
+tq.apply_profile("face", target_obj="Face", dry_run=False)
+
+# Dissolve only
+tq.apply_profile("body", target_obj="Body.only", transfer_normals=False)
+```
 
 ## Verify symmetry
 

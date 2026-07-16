@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import csv
 import json
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from itertools import combinations
@@ -37,11 +38,91 @@ except ImportError:  # pragma: no cover
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 PROFILES_DIR = SKILL_ROOT / "profiles"
 MAPS_DIR = SKILL_ROOT / "maps"
-CLEANUP_TOOLS = SKILL_ROOT.parent / "vroid-vrm-blender-cleanup" / "tools"
+
+
+def _cleanup_tools_dir() -> Path:
+    """Prefer repo sibling cleanup tools with workflow resolver over stale home copy."""
+    candidates = [
+        SKILL_ROOT.parent / "vroid-vrm-blender-cleanup" / "tools",
+        Path.home() / ".cursor" / "skills" / "vroid-vrm-blender-cleanup" / "tools",
+    ]
+    for path in candidates:
+        script = path / "clean_vroid_material_names.py"
+        if not script.is_file():
+            continue
+        text = script.read_text(encoding="utf-8")
+        if "standardize_workflow_tail" in text and "resolve_material_by_token" in text:
+            return path
+    for path in candidates:
+        if (path / "clean_vroid_material_names.py").is_file():
+            return path
+    return candidates[0]
+
+
+CLEANUP_TOOLS = _cleanup_tools_dir()
+
+_SKILL_LOG_NAME = "tri-to-quad-uv-map"
+_SKILL_LOG_FN: Any = None
+_PERF_ELAPSED_MS: Any = None
+_SKILL_LOG_MISSING = object()
+
+
+def _load_skill_log_helpers() -> None:
+    global _SKILL_LOG_FN, _PERF_ELAPSED_MS
+    if _SKILL_LOG_FN is _SKILL_LOG_MISSING:
+        return
+    if _SKILL_LOG_FN is not None:
+        return
+
+    candidates = [
+        SKILL_ROOT.parent / "blender-skill-log" / "tools" / "blender_skill_log.py",
+        Path.home() / ".cursor" / "skills" / "blender-skill-log" / "tools" / "blender_skill_log.py",
+    ]
+    script = next((path for path in candidates if path.is_file()), None)
+    if script is None:
+        _SKILL_LOG_FN = _SKILL_LOG_MISSING
+        return
+
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("blender_skill_log", script)
+    if spec is None or spec.loader is None:
+        _SKILL_LOG_FN = _SKILL_LOG_MISSING
+        return
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    fn = getattr(mod, "skill_log", None)
+    if not callable(fn):
+        _SKILL_LOG_FN = _SKILL_LOG_MISSING
+        return
+    _SKILL_LOG_FN = fn
+    perf = getattr(mod, "perf_elapsed_ms", None)
+    _PERF_ELAPSED_MS = perf if callable(perf) else None
+
+
+def _elapsed_ms(start: float) -> float:
+    _load_skill_log_helpers()
+    if callable(_PERF_ELAPSED_MS):
+        return _PERF_ELAPSED_MS(start)
+    return round((time.perf_counter() - start) * 1000, 2)
+
+
+def _maybe_skill_log(event: str, **data: Any) -> None:
+    _load_skill_log_helpers()
+    if not callable(_SKILL_LOG_FN):
+        return
+    try:
+        _SKILL_LOG_FN(event, skill=_SKILL_LOG_NAME, **data)
+    except Exception:
+        pass
 
 DEFAULT_UV_PREC = 4
 DEFAULT_CO_PREC = 6
 CSV_HEADER = ("u1", "v1", "u2", "v2")
+NORMAL_TRANSFER_MODIFIER = "TriQuad.NormalTransfer"
+NORMAL_SOURCE_SUFFIX = ".NormalSrc"
+NORMAL_ARCHIVE_SUFFIX = ".old"
+SHAPE_KEYS_MODIFIER_APPLY_OP = "apply_modifiers_with_shape_keys"
 
 
 @dataclass
@@ -99,10 +180,10 @@ _resolve_material_fn: Optional[Callable[..., Any]] = None
 def _resolve_material_by_token(token: str) -> Any:
     """Delegate to vroid-vrm-blender-cleanup Phase B material resolver."""
     global _resolve_material_fn
-    if _resolve_material_fn is None:
+    path = _cleanup_tools_dir() / "clean_vroid_material_names.py"
+    if _resolve_material_fn is None or getattr(_resolve_material_fn, "__file__", "") != str(path):
         import importlib.util
 
-        path = CLEANUP_TOOLS / "clean_vroid_material_names.py"
         if not path.is_file():
             raise FileNotFoundError(f"Phase B material tools not found: {path}")
         spec = importlib.util.spec_from_file_location("clean_vroid_material_names", path)
@@ -111,6 +192,7 @@ def _resolve_material_by_token(token: str) -> Any:
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         _resolve_material_fn = mod.resolve_material_by_token
+        setattr(_resolve_material_fn, "__file__", str(path))
     return _resolve_material_fn(token)
 
 
@@ -1017,6 +1099,271 @@ def choose_map_variant(
     }
 
 
+def mesh_has_shape_keys(mesh: Any) -> bool:
+    """True when mesh has shape keys."""
+    return mesh.shape_keys is not None and len(mesh.shape_keys.key_blocks) > 0
+
+
+def shape_keys_modifier_apply_available() -> bool:
+    """Third-party addon: Object > Apply Modifiers With Shape Keys."""
+    return hasattr(bpy.ops.object, SHAPE_KEYS_MODIFIER_APPLY_OP)
+
+
+def _activate_object(obj: Any) -> None:
+    if bpy.context.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
+    for scene_obj in bpy.context.view_layer.objects:
+        scene_obj.select_set(False)
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+
+
+def _modifier_apply_collection(obj: Any, apply_names: set[str]) -> list[dict[str, Any]]:
+    return [
+        {"name": mod.name, "apply_modifier": mod.name in apply_names}
+        for mod in obj.modifiers
+    ]
+
+
+def apply_modifiers_preserving_shape_keys(
+    obj: Any,
+    modifier_names: set[str],
+) -> dict[str, Any]:
+    """Apply selected modifiers via apply_modifiers_with_shape_keys addon operator."""
+    if not shape_keys_modifier_apply_available():
+        return {
+            "applied": False,
+            "reason": "addon_unavailable",
+            "addon_operator": f"object.{SHAPE_KEYS_MODIFIER_APPLY_OP}",
+        }
+
+    missing = sorted(name for name in modifier_names if obj.modifiers.get(name) is None)
+    if missing:
+        return {
+            "applied": False,
+            "reason": "modifier_not_found",
+            "missing_modifiers": missing,
+        }
+
+    collection = _modifier_apply_collection(obj, modifier_names)
+    if not any(item["apply_modifier"] for item in collection):
+        return {"applied": False, "reason": "modifier_not_found", "missing_modifiers": sorted(modifier_names)}
+
+    _activate_object(obj)
+    op = getattr(bpy.ops.object, SHAPE_KEYS_MODIFIER_APPLY_OP)
+    operator_result = op(collection_property=collection)
+    finished = "FINISHED" in operator_result
+
+    return {
+        "applied": finished,
+        "method": SHAPE_KEYS_MODIFIER_APPLY_OP,
+        "operator_result": list(operator_result),
+        "collection_property": collection,
+        "target": obj.name,
+    }
+
+
+def _unique_object_name(base: str) -> str:
+    name = base
+    index = 1
+    while bpy.data.objects.get(name):
+        name = f"{base}.{index:03d}"
+        index += 1
+    return name
+
+
+def duplicate_for_normal_source(obj: Any, *, suffix: str = NORMAL_SOURCE_SUFFIX) -> Any:
+    """Duplicate mesh object before topology edits; used as Data Transfer normal source."""
+    dup = obj.copy()
+    dup.data = obj.data.copy()
+    dup.name = _unique_object_name(f"{obj.name}{suffix}")
+    for coll in obj.users_collection:
+        coll.objects.link(dup)
+    dup.hide_set(True)
+    dup.hide_render = True
+    return dup
+
+
+def delete_object_purge_mesh(obj: Any) -> None:
+    mesh = obj.data
+    bpy.data.objects.remove(obj, do_unlink=True)
+    if mesh and mesh.users == 0:
+        bpy.data.meshes.remove(mesh)
+
+
+def archive_object_name(target_name: str) -> str:
+    """Canonical hidden backup name for one archive per target."""
+    return f"{target_name}{NORMAL_ARCHIVE_SUFFIX}"
+
+
+def archive_normal_source_backup(
+    source_obj: Any,
+    *,
+    target_name: str,
+) -> dict[str, Any]:
+    """Keep pre-topology duplicate for shape-key meshes: rename to ``{target}.old`` and hide."""
+    archived_name = archive_object_name(target_name)
+    source_obj.name = archived_name
+    source_obj.hide_set(True)
+    source_obj.hide_render = True
+    return {
+        "archived": True,
+        "object": archived_name,
+        "hidden": True,
+        "hidden_render": True,
+    }
+
+
+def dispose_normal_source_backup(
+    source_obj: Any,
+    *,
+    target_name: str,
+    keep_archived: bool,
+) -> dict[str, Any] | None:
+    """Delete normal-source duplicate, or archive as ``{target}.old`` when keeping."""
+    if bpy.data.objects.get(source_obj.name) is None:
+        return None
+    if keep_archived:
+        archived_name = archive_object_name(target_name)
+        existing = bpy.data.objects.get(archived_name)
+        if existing is not None and existing != source_obj:
+            delete_object_purge_mesh(source_obj)
+            return {
+                "archived": False,
+                "reason": "archive_exists",
+                "object": archived_name,
+                "reused": True,
+            }
+        return archive_normal_source_backup(source_obj, target_name=target_name)
+    delete_object_purge_mesh(source_obj)
+    return None
+
+
+def setup_corner_normals_data_transfer(
+    target_obj: Any,
+    source_obj: Any,
+    *,
+    modifier_name: str = NORMAL_TRANSFER_MODIFIER,
+) -> dict[str, Any]:
+    """Add Data Transfer modifier for face-corner custom normals (does not apply)."""
+    _activate_object(target_obj)
+
+    existing = target_obj.modifiers.get(modifier_name)
+    if existing is not None:
+        target_obj.modifiers.remove(existing)
+
+    mod = target_obj.modifiers.new(name=modifier_name, type="DATA_TRANSFER")
+    mod.object = source_obj
+    mod.use_loop_data = True
+    mod.data_types_loops = {"CUSTOM_NORMAL"}
+    mod.loop_mapping = "POLYINTERP_NEAREST"
+    mod.mix_mode = "REPLACE"
+    mod.mix_factor = 1.0
+    loop_mapping = mod.loop_mapping
+    data_types_loops = sorted(mod.data_types_loops)
+
+    while target_obj.modifiers and target_obj.modifiers[0].name != modifier_name:
+        bpy.ops.object.modifier_move_up(modifier=modifier_name)
+
+    return {
+        "modifier": modifier_name,
+        "target": target_obj.name,
+        "source": source_obj.name,
+        "loop_mapping": loop_mapping,
+        "data_types_loops": data_types_loops,
+    }
+
+
+def apply_corner_normals_data_transfer_modifier(
+    target_obj: Any,
+    *,
+    modifier_name: str = NORMAL_TRANSFER_MODIFIER,
+    use_shape_keys_apply: bool = False,
+) -> dict[str, Any]:
+    """Apply the normal-transfer Data Transfer modifier."""
+    if target_obj.modifiers.get(modifier_name) is None:
+        return {
+            "applied": False,
+            "reason": "modifier_not_found",
+            "modifier": modifier_name,
+            "target": target_obj.name,
+        }
+
+    if use_shape_keys_apply:
+        apply_result = apply_modifiers_preserving_shape_keys(target_obj, {modifier_name})
+        if not apply_result.get("applied"):
+            return apply_result
+        setup = {
+            "loop_mapping": "POLYINTERP_NEAREST",
+            "data_types_loops": ["CUSTOM_NORMAL"],
+        }
+        return {
+            "applied": True,
+            "target": target_obj.name,
+            "method": SHAPE_KEYS_MODIFIER_APPLY_OP,
+            **setup,
+            **apply_result,
+        }
+
+    _activate_object(target_obj)
+    bpy.ops.object.modifier_apply(modifier=modifier_name)
+    return {
+        "applied": True,
+        "target": target_obj.name,
+        "method": "modifier_apply",
+        "loop_mapping": "POLYINTERP_NEAREST",
+        "data_types_loops": ["CUSTOM_NORMAL"],
+    }
+
+
+def transfer_corner_normals_data_transfer(
+    target_obj: Any,
+    source_obj: Any,
+    *,
+    modifier_name: str = NORMAL_TRANSFER_MODIFIER,
+    use_shape_keys_apply: bool = False,
+) -> dict[str, Any]:
+    """Face-corner custom normals via Data Transfer (Nearest Corner of Nearest Face)."""
+    setup = setup_corner_normals_data_transfer(
+        target_obj,
+        source_obj,
+        modifier_name=modifier_name,
+    )
+    applied = apply_corner_normals_data_transfer_modifier(
+        target_obj,
+        modifier_name=modifier_name,
+        use_shape_keys_apply=use_shape_keys_apply,
+    )
+    return {**setup, **applied, "source": source_obj.name}
+
+
+def apply_normal_transfer_workflow(
+    target_obj: Any,
+    source_obj: Any,
+    *,
+    use_shape_keys_apply: bool = False,
+) -> dict[str, Any]:
+    """Transfer corner normals from pre-topology duplicate onto tri→quad result."""
+    transfer = transfer_corner_normals_data_transfer(
+        target_obj,
+        source_obj,
+        use_shape_keys_apply=use_shape_keys_apply,
+    )
+    if not transfer.get("applied"):
+        return {
+            "skipped": True,
+            "object": target_obj.name,
+            "source_object": source_obj.name,
+            **transfer,
+        }
+    return {
+        "skipped": False,
+        "object": target_obj.name,
+        "source_object": source_obj.name,
+        **transfer,
+    }
+
+
 def apply_profile(
     profile_name: str,
     target_obj: str,
@@ -1025,8 +1372,32 @@ def apply_profile(
     uv_layer: str | None = None,
     material_token: str | None = None,
     dry_run: bool = False,
+    transfer_normals: bool = True,
     profiles_dir: Path | None = None,
 ) -> dict[str, Any]:
+    _maybe_skill_log(
+        "phase_start",
+        phase=profile_name,
+        target_obj=target_obj,
+        dry_run=dry_run,
+        transfer_normals=transfer_normals,
+    )
+    phase_start = time.perf_counter()
+
+    def _finish(result: dict[str, Any]) -> dict[str, Any]:
+        result["elapsed_ms"] = _elapsed_ms(phase_start)
+        _maybe_skill_log(
+            "phase_done",
+            phase=profile_name,
+            target_obj=target_obj,
+            dry_run=dry_run,
+            elapsed_ms=result["elapsed_ms"],
+            skipped=bool(result.get("skipped")),
+            reason=result.get("reason"),
+            applied=result.get("applied"),
+        )
+        return result
+
     prof = Profile.load(profile_name, profiles_dir)
     token = material_token if material_token is not None else prof.material_token
     map_choice: dict[str, Any] | None = None
@@ -1040,34 +1411,40 @@ def apply_profile(
             material_token=token,
         )
         if map_choice.get("error") == "no_usable_map_variant":
-            return _skip_result(
-                reason="no_usable_map_variant",
-                profile=profile_name,
-                target_obj=target_obj,
-                material_token=token,
-                audits=map_choice.get("audits", []),
+            return _finish(
+                _skip_result(
+                    reason="no_usable_map_variant",
+                    profile=profile_name,
+                    target_obj=target_obj,
+                    material_token=token,
+                    audits=map_choice.get("audits", []),
+                )
             )
         if map_choice.get("skipped"):
-            return map_choice
+            return _finish(map_choice)
         chosen = map_choice.get("chosen_map")
         if not chosen:
-            return _skip_result(
-                reason="map_not_chosen",
-                profile=profile_name,
-                target_obj=target_obj,
-                material_token=token,
+            return _finish(
+                _skip_result(
+                    reason="map_not_chosen",
+                    profile=profile_name,
+                    target_obj=target_obj,
+                    material_token=token,
+                )
             )
         path = Path(chosen)
     else:
         path = Path(map_path) if map_path else prof.map_path
 
     if not path.is_file():
-        return _skip_result(
-            reason="map_not_found",
-            profile=profile_name,
-            target_obj=target_obj,
-            map_path=str(path),
-            material_token=token,
+        return _finish(
+            _skip_result(
+                reason="map_not_found",
+                profile=profile_name,
+                target_obj=target_obj,
+                map_path=str(path),
+                material_token=token,
+            )
         )
 
     allowed_slots: Set[int] | None = None
@@ -1080,7 +1457,19 @@ def apply_profile(
             map_path=str(path),
         )
         if skip is not None:
-            return skip
+            return _finish(skip)
+
+    target_object = bpy.data.objects.get(target_obj)
+    has_shape_keys = (
+        target_object is not None
+        and target_object.type == "MESH"
+        and mesh_has_shape_keys(target_object.data)
+    )
+    shape_keys_apply_ready = has_shape_keys and shape_keys_modifier_apply_available()
+
+    normal_src = None
+    if transfer_normals and not dry_run and target_object:
+        normal_src = duplicate_for_normal_source(target_object)
 
     result = apply_map(
         target_obj,
@@ -1090,9 +1479,15 @@ def apply_profile(
         dry_run=dry_run,
     )
     if result.get("skipped"):
+        if normal_src is not None:
+            dispose_normal_source_backup(
+                normal_src,
+                target_name=target_obj,
+                keep_archived=False,
+            )
         result.setdefault("profile", profile_name)
         result.setdefault("material_token", token)
-        return result
+        return _finish(result)
 
     result["profile"] = profile_name
     if map_choice and map_choice.get("auto_select"):
@@ -1102,7 +1497,71 @@ def apply_profile(
     if token:
         result["material_token"] = token
         result["material_name"] = resolved_material.name if resolved_material else None
-    return result
+
+    if not transfer_normals:
+        result["normal_transfer"] = {"skipped": True, "reason": "disabled"}
+    elif dry_run:
+        result["normal_transfer"] = {
+            "skipped": True,
+            "reason": "dry_run",
+            "eligible": True,
+            "has_shape_keys": has_shape_keys,
+            "shape_keys_apply_available": shape_keys_modifier_apply_available(),
+            "shape_keys_apply_ready": shape_keys_apply_ready,
+        }
+    elif has_shape_keys and not shape_keys_apply_ready:
+        result["normal_transfer"] = {
+            "skipped": True,
+            "reason": "shape_keys_addon_unavailable",
+            "has_shape_keys": True,
+            "addon_operator": f"object.{SHAPE_KEYS_MODIFIER_APPLY_OP}",
+            "hint": "Enable Apply Modifiers With Shape Keys addon, or split mesh by material first.",
+        }
+    elif normal_src is None:
+        result["normal_transfer"] = {
+            "skipped": True,
+            "reason": "mesh_object_not_found",
+        }
+    elif int(result.get("applied", 0)) <= 0:
+        dispose_normal_source_backup(
+            normal_src,
+            target_name=target_object.name,
+            keep_archived=False,
+        )
+        result["normal_transfer"] = {
+            "skipped": True,
+            "reason": "no_dissolves_applied",
+        }
+    else:
+        try:
+            result["normal_transfer"] = apply_normal_transfer_workflow(
+                target_object,
+                normal_src,
+                use_shape_keys_apply=has_shape_keys,
+            )
+        except Exception as exc:  # pragma: no cover
+            result["normal_transfer"] = {
+                "skipped": True,
+                "reason": "transfer_failed",
+                "error": str(exc),
+            }
+        finally:
+            nt = result.get("normal_transfer") or {}
+            keep_archived = bool(
+                has_shape_keys
+                and not nt.get("skipped")
+                and nt.get("applied")
+            )
+            archived = dispose_normal_source_backup(
+                normal_src,
+                target_name=target_object.name,
+                keep_archived=keep_archived,
+            )
+            if archived is not None:
+                nt["archived_source"] = archived
+                result["normal_transfer"] = nt
+
+    return _finish(result)
 
 
 def audit_topology(obj_name: str) -> dict[str, int]:

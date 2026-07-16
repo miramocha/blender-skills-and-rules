@@ -12,6 +12,7 @@ MCP / Scripting:
 from __future__ import annotations
 
 import math
+import time
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,61 @@ FACE_ANGLE_DEG = 90.0
 SHAPE_ANGLE_DEG = 90.0
 VG_CAP = "Hair.Cap"
 VG_STRIP = "Hair.Strip"
+
+_SKILL_LOG_NAME = "hair-tris-to-quad"
+_SKILL_LOG_FN: Any = None
+_PERF_ELAPSED_MS: Any = None
+_SKILL_LOG_MISSING = object()
+
+
+def _load_skill_log_helpers() -> None:
+    global _SKILL_LOG_FN, _PERF_ELAPSED_MS
+    if _SKILL_LOG_FN is _SKILL_LOG_MISSING:
+        return
+    if _SKILL_LOG_FN is not None:
+        return
+
+    candidates = [
+        SKILL_ROOT.parent / "blender-skill-log" / "tools" / "blender_skill_log.py",
+        Path.home() / ".cursor" / "skills" / "blender-skill-log" / "tools" / "blender_skill_log.py",
+    ]
+    script = next((path for path in candidates if path.is_file()), None)
+    if script is None:
+        _SKILL_LOG_FN = _SKILL_LOG_MISSING
+        return
+
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("blender_skill_log", script)
+    if spec is None or spec.loader is None:
+        _SKILL_LOG_FN = _SKILL_LOG_MISSING
+        return
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    fn = getattr(mod, "skill_log", None)
+    if not callable(fn):
+        _SKILL_LOG_FN = _SKILL_LOG_MISSING
+        return
+    _SKILL_LOG_FN = fn
+    perf = getattr(mod, "perf_elapsed_ms", None)
+    _PERF_ELAPSED_MS = perf if callable(perf) else None
+
+
+def _elapsed_ms(start: float) -> float:
+    _load_skill_log_helpers()
+    if callable(_PERF_ELAPSED_MS):
+        return _PERF_ELAPSED_MS(start)
+    return round((time.perf_counter() - start) * 1000, 2)
+
+
+def _maybe_skill_log(event: str, **data: Any) -> None:
+    _load_skill_log_helpers()
+    if not callable(_SKILL_LOG_FN):
+        return
+    try:
+        _SKILL_LOG_FN(event, skill=_SKILL_LOG_NAME, **data)
+    except Exception:
+        pass
 
 
 def _uv_key(uv, prec: int) -> tuple[float, float]:
@@ -347,9 +403,34 @@ def apply_tris_to_quads(
     When ``assign_vertex_groups`` is True (default), writes ``Hair.Cap`` and
     ``Hair.Strip`` from UV cap detection **before** convert (requires tri caps).
     """
+    phase = "hair_tris_to_quads"
+    _maybe_skill_log(
+        "phase_start",
+        phase=phase,
+        target_obj=obj_name,
+        dry_run=dry_run,
+        assign_vertex_groups=assign_vertex_groups,
+    )
+    phase_start = time.perf_counter()
+
+    def _finish(result: dict[str, Any]) -> dict[str, Any]:
+        result["elapsed_ms"] = _elapsed_ms(phase_start)
+        _maybe_skill_log(
+            "phase_done",
+            phase=phase,
+            target_obj=obj_name,
+            dry_run=dry_run,
+            elapsed_ms=result["elapsed_ms"],
+            skipped=bool(result.get("skipped")),
+            reason=result.get("reason"),
+            tris_before=result.get("tris_before"),
+            quads_after=result.get("quads_after"),
+        )
+        return result
+
     obj = bpy.data.objects.get(obj_name)
     if obj is None or obj.type != "MESH":
-        return {"skipped": True, "reason": "mesh_object_not_found", "object": obj_name}
+        return _finish({"skipped": True, "reason": "mesh_object_not_found", "object": obj_name})
 
     before = audit_topology(obj_name)
     tri_before = before.get(3, 0)
@@ -361,31 +442,35 @@ def apply_tris_to_quads(
         )
 
     if tri_before == 0:
-        return {
-            "object": obj_name,
-            "mode": "tris_convert_to_quads",
-            "dry_run": dry_run,
-            "skipped": True,
-            "reason": "no_tris",
-            "topology_before": before,
-            "topology_after": before,
-            "face_angle_deg": face_angle_deg,
-            "shape_angle_deg": shape_angle_deg,
-            "vertex_groups": vertex_groups,
-        }
+        return _finish(
+            {
+                "object": obj_name,
+                "mode": "tris_convert_to_quads",
+                "dry_run": dry_run,
+                "skipped": True,
+                "reason": "no_tris",
+                "topology_before": before,
+                "topology_after": before,
+                "face_angle_deg": face_angle_deg,
+                "shape_angle_deg": shape_angle_deg,
+                "vertex_groups": vertex_groups,
+            }
+        )
 
     if dry_run:
-        return {
-            "object": obj_name,
-            "mode": "tris_convert_to_quads",
-            "dry_run": True,
-            "skipped": False,
-            "topology_before": before,
-            "tris_before": tri_before,
-            "face_angle_deg": face_angle_deg,
-            "shape_angle_deg": shape_angle_deg,
-            "vertex_groups": vertex_groups,
-        }
+        return _finish(
+            {
+                "object": obj_name,
+                "mode": "tris_convert_to_quads",
+                "dry_run": True,
+                "skipped": False,
+                "topology_before": before,
+                "tris_before": tri_before,
+                "face_angle_deg": face_angle_deg,
+                "shape_angle_deg": shape_angle_deg,
+                "vertex_groups": vertex_groups,
+            }
+        )
 
     view_layer = bpy.context.view_layer
     prev_active = view_layer.objects.active
@@ -415,17 +500,19 @@ def apply_tris_to_quads(
                 bpy.ops.object.mode_set(mode="EDIT")
 
     after = audit_topology(obj_name)
-    return {
-        "object": obj_name,
-        "mode": "tris_convert_to_quads",
-        "dry_run": False,
-        "skipped": False,
-        "topology_before": before,
-        "topology_after": after,
-        "tris_before": tri_before,
-        "tris_after": after.get(3, 0),
-        "quads_after": after.get(4, 0),
-        "face_angle_deg": face_angle_deg,
-        "shape_angle_deg": shape_angle_deg,
-        "vertex_groups": vertex_groups,
-    }
+    return _finish(
+        {
+            "object": obj_name,
+            "mode": "tris_convert_to_quads",
+            "dry_run": False,
+            "skipped": False,
+            "topology_before": before,
+            "topology_after": after,
+            "tris_before": tri_before,
+            "tris_after": after.get(3, 0),
+            "quads_after": after.get(4, 0),
+            "face_angle_deg": face_angle_deg,
+            "shape_angle_deg": shape_angle_deg,
+            "vertex_groups": vertex_groups,
+        }
+    )

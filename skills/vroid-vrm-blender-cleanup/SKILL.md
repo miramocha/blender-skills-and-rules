@@ -24,18 +24,31 @@ Related skills (invoked by orchestrator or manually):
 - **blender-bone-remap** — umbrella **Phase G** (bones) + **Phase H** (colliders)
 - **blender-bone-collections** — umbrella **Phase K** (Hair / Body / Clothing bone collections)
 - **mtoon-material-sync** — umbrella **Phase J** (rim + shading parametric sync)
+- **blender-skill-log** — execution logging to `config/skill_execution.log` (auto from orchestrator)
+
+## Execution logging
+
+`run_full_pipeline()` logs `pipeline_start`, `phase_done`, and `pipeline_end` via [blender-skill-log](../blender-skill-log/SKILL.md). MCP captures each line in `stdout`; tail history with `tail_skill_log()`.
 
 ## Full pipeline (primary entry)
 
 ```python
 import os
 
+# Prefer this repo's tools when present; else ~/.cursor/skills copy
 SKILL_TOOLS = os.path.join(
     os.path.expanduser("~"), ".cursor", "skills", "vroid-vrm-blender-cleanup", "tools"
 )
-# Repo: skills/vroid-vrm-blender-cleanup/tools
+REPO_TOOLS = r"D:\MiraGameDev\blender-skills-and-rules\skills\vroid-vrm-blender-cleanup\tools"
+if os.path.isdir(REPO_TOOLS):
+    SKILL_TOOLS = REPO_TOOLS
 
-exec(open(os.path.join(SKILL_TOOLS, "run_full_pipeline.py")).read())
+_pipeline_path = os.path.join(SKILL_TOOLS, "run_full_pipeline.py")
+_pipeline_ns = {"__file__": _pipeline_path}
+exec(compile(open(_pipeline_path, encoding="utf-8").read(), _pipeline_path, "exec"), _pipeline_ns)
+run_full_pipeline = _pipeline_ns["run_full_pipeline"]
+run_full_pipeline.SKILL_TOOLS_DIR = SKILL_TOOLS
+```
 
 # Dry-run entire pipeline (audit only)
 result = run_full_pipeline(body_type="female", dry_run=True)

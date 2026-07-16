@@ -195,6 +195,35 @@ def _clothing_variants(token: str) -> List[str]:
     return sorted(variants)
 
 
+def workflow_material_names_in_scene(token: str) -> List[str]:
+    """Scene datablock names that standardize to this workflow token."""
+    names: List[str] = []
+    for mat in bpy.data.materials:
+        if clean_vroid_material_name(mat.name) == token:
+            names.append(mat.name)
+    return sorted(names)
+
+
+def _prefer_material_match(
+    token: str, candidates: List[bpy.types.Material]
+) -> bpy.types.Material:
+    """Prefer exact workflow name, then VRoid (Instance), then shortest name."""
+
+    def rank(mat: bpy.types.Material) -> tuple:
+        name = mat.name
+        bare = strip_instance_suffix(name)
+        return (
+            0 if name == token else 1,
+            0 if name.endswith(" (Instance)") else 1,
+            0 if bare == token else 1,
+            1 if re.search(r"\.\d{3}$", bare) else 0,
+            len(name),
+            name,
+        )
+
+    return min(candidates, key=rank)
+
+
 def material_name_variants(token: str, scene: Optional[bpy.types.Scene] = None) -> List[str]:
     """Import name, VRoid tail, workflow name, and stored aliases."""
     variants = {token}
@@ -206,6 +235,8 @@ def material_name_variants(token: str, scene: Optional[bpy.types.Scene] = None) 
         stripped = _intermediate_stripped_name(token) if VRoid_SLOT_PREFIX.search(token) else token
         variants.add(apply_workflow_material_name(stripped))
         variants.add(apply_workflow_material_name(token))
+
+    variants.update(workflow_material_names_in_scene(token))
 
     fwd = load_stored_rename_map(scene)
     for old, new in fwd.items():
@@ -241,10 +272,18 @@ def resolve_material_by_token(
         if mat:
             return mat
 
+    workflow_matches = [
+        bpy.data.materials.get(name)
+        for name in workflow_material_names_in_scene(token)
+    ]
+    workflow_matches = [m for m in workflow_matches if m is not None]
+    if workflow_matches:
+        return _prefer_material_match(token, workflow_matches)
+
     candidates = [m for m in bpy.data.materials if token in m.name]
     if not candidates:
         return None
-    return min(candidates, key=lambda m: (m.name != token, len(m.name), m.name))
+    return _prefer_material_match(token, candidates)
 
 
 def unique_material_name(desired: str, current: bpy.types.Material) -> str:
@@ -265,11 +304,10 @@ def unique_material_name(desired: str, current: bpy.types.Material) -> str:
 
 
 def build_material_rename_map() -> Dict[str, str]:
+    """N00 import names and Phase-B intermediate tails → workflow dot names."""
     mapping: Dict[str, str] = {}
     for mat in bpy.data.materials:
         old_name = mat.name
-        if not needs_cleanup(old_name):
-            continue
         new_name = clean_vroid_material_name(old_name)
         if new_name == old_name:
             continue

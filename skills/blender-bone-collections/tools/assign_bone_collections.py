@@ -70,34 +70,60 @@ def _mesh_category_hints(armature_object_name: str) -> Dict[str, Set[str]]:
     return {"hair": hair_meshes, "cloth": cloth_meshes, "body": body_meshes}
 
 
-def _bone_weighted_meshes(
-    armature_object_name: str,
-    bone_name: str,
-) -> Set[str]:
+def _rigged_mesh_objects(armature_object_name: str) -> List[bpy.types.Object]:
     arm_obj = bpy.data.objects.get(armature_object_name)
-    if not arm_obj or bone_name not in arm_obj.data.bones:
-        return set()
+    if not arm_obj:
+        return []
 
-    hits: Set[str] = set()
+    meshes: List[bpy.types.Object] = []
     for obj in bpy.data.objects:
         if obj.type != "MESH":
             continue
         parent = obj.parent
-        if parent != arm_obj and parent != arm_obj.parent:
+        if parent == arm_obj or parent == arm_obj.parent:
+            meshes.append(obj)
+    return meshes
+
+
+def _build_bone_weighted_mesh_index(armature_object_name: str) -> Dict[str, Set[str]]:
+    """Single pass: bone name -> mesh objects with weight > 0 on that bone."""
+    arm_obj = bpy.data.objects.get(armature_object_name)
+    if not arm_obj:
+        return {}
+
+    valid_bones = {bone.name for bone in arm_obj.data.bones}
+    index: Dict[str, Set[str]] = {}
+
+    for obj in _rigged_mesh_objects(armature_object_name):
+        vg_to_bone: Dict[int, str] = {}
+        for vg in obj.vertex_groups:
+            if vg.name in valid_bones:
+                vg_to_bone[vg.index] = vg.name
+        if not vg_to_bone:
             continue
-        vg = obj.vertex_groups.get(bone_name)
-        if not vg:
-            continue
-        idx = vg.index
+
         for vert in obj.data.vertices:
-            for g in vert.groups:
-                if g.group == idx and g.weight > 0.0001:
-                    hits.add(obj.name)
-                    break
-            else:
-                continue
-            break
-    return hits
+            for group in vert.groups:
+                if group.weight <= 0.0001:
+                    continue
+                bone_name = vg_to_bone.get(group.group)
+                if bone_name is None:
+                    continue
+                index.setdefault(bone_name, set()).add(obj.name)
+
+    return index
+
+
+def _bone_weighted_meshes(
+    armature_object_name: str,
+    bone_name: str,
+    *,
+    weighted_mesh_index: Optional[Dict[str, Set[str]]] = None,
+) -> Set[str]:
+    if weighted_mesh_index is not None:
+        return set(weighted_mesh_index.get(bone_name, set()))
+
+    return set(_build_bone_weighted_mesh_index(armature_object_name).get(bone_name, set()))
 
 
 def classify_bone(
@@ -105,6 +131,7 @@ def classify_bone(
     *,
     armature_object_name: str = "Armature",
     mesh_hints: Optional[Dict[str, Set[str]]] = None,
+    weighted_mesh_index: Optional[Dict[str, Set[str]]] = None,
 ) -> str:
     if RE_BODY_FORCE.match(bone_name):
         return COLLECTION_BODY
@@ -114,7 +141,11 @@ def classify_bone(
         return COLLECTION_CLOTHING
 
     hints = mesh_hints or _mesh_category_hints(armature_object_name)
-    weighted = _bone_weighted_meshes(armature_object_name, bone_name)
+    weighted = _bone_weighted_meshes(
+        armature_object_name,
+        bone_name,
+        weighted_mesh_index=weighted_mesh_index,
+    )
     if weighted:
         hair_meshes = hints.get("hair", set())
         cloth_meshes = hints.get("cloth", set())
@@ -135,6 +166,7 @@ def _planned_assignments(
         return {}
 
     hints = _mesh_category_hints(armature_object_name)
+    weighted_mesh_index = _build_bone_weighted_mesh_index(armature_object_name)
     plan: Dict[str, List[str]] = {name: [] for name in collection_names}
 
     for bone in arm.data.bones:
@@ -142,6 +174,7 @@ def _planned_assignments(
             bone.name,
             armature_object_name=armature_object_name,
             mesh_hints=hints,
+            weighted_mesh_index=weighted_mesh_index,
         )
         if category not in plan:
             plan[category] = []
