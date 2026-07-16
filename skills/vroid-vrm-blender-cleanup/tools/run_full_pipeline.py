@@ -63,7 +63,7 @@ def _skill_paths() -> dict:
 
 
 def _exec_script(script_path: str) -> Dict[str, Any]:
-    namespace: Dict[str, Any] = {}
+    namespace: Dict[str, Any] = {"__file__": script_path}
     with open(script_path, encoding="utf-8") as handle:
         exec(compile(handle.read(), script_path, "exec"), namespace)
     return namespace

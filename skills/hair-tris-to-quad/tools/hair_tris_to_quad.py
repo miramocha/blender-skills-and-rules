@@ -35,6 +35,24 @@ SHAPE_ANGLE_DEG = 90.0
 VG_CAP = "Hair.Cap"
 VG_STRIP = "Hair.Strip"
 
+
+def _ensure_object_mode() -> str:
+    prev = bpy.context.mode
+    if prev != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
+    return prev
+
+
+def _restore_mode(prev: str) -> None:
+    if prev == "OBJECT":
+        return
+    mode = "EDIT" if "EDIT" in prev else prev
+    try:
+        bpy.ops.object.mode_set(mode=mode)
+    except TypeError:
+        pass
+
+
 _SKILL_LOG_NAME = "hair-tris-to-quad"
 _SKILL_LOG_FN: Any = None
 _PERF_ELAPSED_MS: Any = None
@@ -440,6 +458,17 @@ def apply_tris_to_quads(
         vertex_groups = assign_cap_strip_vertex_groups(
             obj_name, vg_cap=vg_cap, vg_strip=vg_strip, uv_layer=uv_layer
         )
+        vg_error = vertex_groups.get("error")
+        if vg_error:
+            return _finish(
+                {
+                    "skipped": True,
+                    "reason": vg_error,
+                    "object": obj_name,
+                    "topology_before": before,
+                    "vertex_groups": vertex_groups,
+                }
+            )
 
     if tri_before == 0:
         return _finish(
@@ -474,12 +503,11 @@ def apply_tris_to_quads(
 
     view_layer = bpy.context.view_layer
     prev_active = view_layer.objects.active
-    prev_mode = prev_active.mode if prev_active else "OBJECT"
+    prev_mode = bpy.context.mode
     prev_selection = {o: o.select_get() for o in view_layer.objects}
 
     try:
-        if bpy.context.mode != "OBJECT":
-            bpy.ops.object.mode_set(mode="OBJECT")
+        _ensure_object_mode()
         for o in view_layer.objects:
             o.select_set(False)
         obj.select_set(True)
@@ -496,8 +524,7 @@ def apply_tris_to_quads(
             o.select_set(selected)
         if prev_active is not None:
             view_layer.objects.active = prev_active
-            if prev_mode == "EDIT" and prev_active.type == "MESH":
-                bpy.ops.object.mode_set(mode="EDIT")
+        _restore_mode(prev_mode)
 
     after = audit_topology(obj_name)
     return _finish(

@@ -9,9 +9,54 @@ Run via MCP execute_blender_code or Blender Scripting workspace:
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
 import bpy
+
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+_phase_b_resolve_fn: Optional[Callable[..., Any]] = None
+
+
+def _cleanup_tools_dir() -> Path:
+    """Prefer repo sibling cleanup tools with workflow resolver over stale home copy."""
+    candidates = [
+        SKILL_ROOT.parent / "vroid-vrm-blender-cleanup" / "tools",
+        Path.home() / ".cursor" / "skills" / "vroid-vrm-blender-cleanup" / "tools",
+    ]
+    for path in candidates:
+        script = path / "clean_vroid_material_names.py"
+        if not script.is_file():
+            continue
+        text = script.read_text(encoding="utf-8")
+        if "standardize_workflow_tail" in text and "resolve_material_by_token" in text:
+            return path
+    for path in candidates:
+        if (path / "clean_vroid_material_names.py").is_file():
+            return path
+    return candidates[0]
+
+
+def _phase_b_resolve_material(token: str) -> Optional[bpy.types.Material]:
+    """Delegate to vroid-vrm-blender-cleanup Phase B material resolver."""
+    global _phase_b_resolve_fn
+    path = _cleanup_tools_dir() / "clean_vroid_material_names.py"
+    if _phase_b_resolve_fn is None or getattr(_phase_b_resolve_fn, "__file__", "") != str(path):
+        import importlib.util
+
+        if not path.is_file():
+            return None
+        spec = importlib.util.spec_from_file_location("clean_vroid_material_names", path)
+        if spec is None or spec.loader is None:
+            return None
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        fn = getattr(mod, "resolve_material_by_token", None)
+        if not callable(fn):
+            return None
+        _phase_b_resolve_fn = fn
+        setattr(_phase_b_resolve_fn, "__file__", str(path))
+    return _phase_b_resolve_fn(token)
 
 MTOON_OUTPUT_NODE = "Mtoon1Material.Mtoon1Output"
 DEFAULT_REFERENCE_MATERIAL = "Face.Skin"
@@ -90,13 +135,13 @@ def _mtoon_output_node(mat: bpy.types.Material) -> Optional[bpy.types.Node]:
 
 
 def resolve_material_by_token(token: str) -> Optional[bpy.types.Material]:
-    """Exact datablock name first, then first in-use MToon mat whose name contains token."""
+    """Phase B workflow/VRoid resolver first, then MToon substring fallback."""
     if not token:
         return None
 
-    mat = bpy.data.materials.get(token)
-    if mat and _mtoon_output_node(mat):
-        return mat
+    mat = _phase_b_resolve_material(token)
+    if mat is not None:
+        return mat if _mtoon_output_node(mat) else None
 
     candidates = [
         m
