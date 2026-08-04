@@ -162,6 +162,11 @@ def convert_body_bone_name(old: str) -> Optional[str]:
     m = re.match(r"^(.+?)_(L|R)$", old)
     if m:
         return f"{pascal_to_camel(m.group(1))}.{m.group(2).lower()}"
+    # Center accessory leftovers from Phase A (e.g. RabbitTail1_01 — no _L/_R)
+    if old and old[0].isupper() and not old.startswith("J_"):
+        camel = pascal_to_camel(old)
+        if camel != old:
+            return camel
     return None
 
 

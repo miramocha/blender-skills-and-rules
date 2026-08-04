@@ -1,5 +1,5 @@
 """
-Assign armature bones to Hair / Body / Clothing bone collections.
+Assign armature bones to Hair / Body / Clothing / Ears/Tails bone collections.
 
 Run via MCP execute_blender_code or Blender Scripting workspace:
 
@@ -17,11 +17,23 @@ import bpy
 COLLECTION_HAIR = "Hair"
 COLLECTION_BODY = "Body"
 COLLECTION_CLOTHING = "Clothing"
-DEFAULT_COLLECTIONS = (COLLECTION_HAIR, COLLECTION_BODY, COLLECTION_CLOTHING)
+COLLECTION_EARS_TAILS = "Ears/Tails"
+DEFAULT_COLLECTIONS = (
+    COLLECTION_HAIR,
+    COLLECTION_BODY,
+    COLLECTION_CLOTHING,
+    COLLECTION_EARS_TAILS,
+)
 
 # Post-remap and VRoid hair bone names.
 RE_HAIR = re.compile(
     r"^(hair|Hair|J_Sec_Hair)",
+    re.I,
+)
+
+# Ear / tail accessory chains (post-remap + Phase A / J_Opt).
+RE_EARS_TAILS = re.compile(
+    r"^(rabbitEar|rabbitTail|RabbitEar|RabbitTail|J_Opt_.*(Ear|Tail))",
     re.I,
 )
 
@@ -137,6 +149,8 @@ def classify_bone(
         return COLLECTION_BODY
     if RE_HAIR.match(bone_name):
         return COLLECTION_HAIR
+    if RE_EARS_TAILS.match(bone_name):
+        return COLLECTION_EARS_TAILS
     if RE_CLOTHING.match(bone_name):
         return COLLECTION_CLOTHING
 
