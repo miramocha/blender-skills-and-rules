@@ -178,6 +178,44 @@ def build_body_mapping(armature_data, skip_hair_prefix: str = "hair") -> Dict[st
 
 # --- Apply / verify ---
 
+def iter_action_fcurves(action):
+    """Yield F-Curves from legacy or Blender 4.4+/5.x layered Actions."""
+    fcurves = getattr(action, "fcurves", None)
+    if fcurves is not None:
+        for fc in fcurves:
+            yield fc
+        return
+    for layer in getattr(action, "layers", []) or []:
+        for strip in getattr(layer, "strips", []) or []:
+            channelbags = getattr(strip, "channelbags", None)
+            if channelbags is not None:
+                for channelbag in channelbags:
+                    for fc in channelbag.fcurves:
+                        yield fc
+            else:
+                channelbag = getattr(strip, "channelbag", None)
+                if channelbag is not None:
+                    for fc in channelbag.fcurves:
+                        yield fc
+
+
+def rewrite_action_fcurves(mapping: Dict[str, str]) -> int:
+    """Rewrite pose.bones[\"old\"] paths in all actions. Returns F-Curve update count."""
+    fc_count = 0
+    for action in bpy.data.actions:
+        for fc in iter_action_fcurves(action):
+            path = fc.data_path
+            new_path = path
+            for old, new in mapping.items():
+                ref = f'pose.bones["{old}"]'
+                if ref in new_path:
+                    new_path = new_path.replace(ref, f'pose.bones["{new}"]')
+            if new_path != path:
+                fc.data_path = new_path
+                fc_count += 1
+    return fc_count
+
+
 def dry_run_mapping(mapping: Dict[str, str], armature_data) -> dict:
     inv: Dict[str, List[str]] = {}
     for old, new in mapping.items():
@@ -226,18 +264,7 @@ def apply_mapping(
                 c.subtarget = mapping[st]
                 cons_count += 1
 
-    fc_count = 0
-    for action in bpy.data.actions:
-        for fc in action.fcurves:
-            path = fc.data_path
-            new_path = path
-            for old, new in mapping.items():
-                ref = f'pose.bones["{old}"]'
-                if ref in new_path:
-                    new_path = new_path.replace(ref, f'pose.bones["{new}"]')
-            if new_path != path:
-                fc.data_path = new_path
-                fc_count += 1
+    fc_count = rewrite_action_fcurves(mapping)
 
     return {
         "bones": len(mapping),
