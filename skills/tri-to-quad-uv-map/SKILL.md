@@ -41,8 +41,9 @@ One profile per **material slot**, not per object. Run multiple profiles against
 | `eyewhite` | `EyeWhite.Eye` | `EyeWhite` | ✓ |
 | `body` | `Body.Skin` | `Body` | — |
 | `hairback` | `Hair.Back` | `Body` (slot 1) / `HairBack` | ✓ |
+| `longboots` | `Shoes.Cloth` | `LongBoots` / shoe slot | ✓ |
 
-Clothing slots on `Body` (`Hoodie.Cloth`, `Shoes.Cloth`, …) are outfit-specific — no project CSV yet.
+Clothing slots on `Body` (`Hoodie.Cloth`, …) are outfit-specific unless a profile/CSV exists (`longboots` for `Shoes.Cloth`).
 
 ## MCP / Scripting
 

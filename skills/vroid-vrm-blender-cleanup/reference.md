@@ -76,11 +76,13 @@ VRoid `_00_` is a **category separator**. Phase B converts tails to `{Region}.{P
 | `EyeHighlight_00_EYE` | `EyeHighlight.Eye` |
 | `EyeWhite_00_EYE` | `EyeWhite.Eye` |
 | `HairBack_00_HAIR` | `Hair.Back` |
+| `Hair_00_HAIR` | `Hair.Back` |
 | `Hair_00_HAIR_01` | `Hair.01` |
 | `Shoes_01_CLOTH` | `Shoes.Cloth` |
 | `Tops_01_CLOTH_01` | `Hoodie_01.Cloth` |
 | `Tops_01_CLOTH_02` | `Hoodie_02.Cloth` |
-| `Shoes_01_CLOTH` | `Shoes.Cloth` |
+| `Accessory_RabbitEar_01_CLOTH` | `RabbitEar.Cloth` |
+| `Accessory_RabbitTail_01_CLOTH` | `RabbitTail.Cloth` |
 
 Texture slugs lowercase and replace `.` with `_` (`Face.Skin` → `face_skin`).
 

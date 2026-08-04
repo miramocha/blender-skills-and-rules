@@ -19,12 +19,21 @@ from typing import Dict, List, Optional, Tuple
 import bpy
 
 # N00_005_01_ / N00_000_00_ — outfit or body slot prefix
+# Named third segment (e.g. Hair) is handled by VRoid_HAIR_MAT first — do not strip it here.
 VRoid_SLOT_PREFIX = re.compile(r"^N\d{2}_\d{3}_(?:\d{2}|[A-Za-z]+)_")
 
-# Hair strand: N00_000_Hair_00_HAIR_01 → Hair.01
+# Hair mat or strand: N00_000_Hair_00_HAIR / N00_000_Hair_00_HAIR_01
+# Must run before SLOT_PREFIX or `Hair_` is eaten → broken tail `00_HAIR`.
+VRoid_HAIR_MAT = re.compile(r"^N\d{2}_\d{3}_(Hair_\d{2}_HAIR(?:_\d+)?)$")
+
+# Hair strand (legacy alias of VRoid_HAIR_MAT with capture)
 VRoid_HAIR_STRAND_PREFIX = re.compile(r"^N\d{2}_\d{3}_Hair_\d{2}_HAIR_(\d+)$")
 
 INSTANCE_SUFFIX = re.compile(r" \(Instance\)$")
+# Blender auto-dup on datablock collision (ARKit .001 mats)
+BLENDER_DUP_SUFFIX = re.compile(r"(\.\d{3})$")
+# Botched outline inner from earlier buggy Phase B: N00_000.Face_00_skin.001
+BROKEN_FACE_SKIN_INNER = re.compile(r"^N\d{2}_\d{3}\.Face_00_skin$", re.IGNORECASE)
 
 SCENE_RENAME_MAP_KEY = "vroid_material_rename_map"
 
@@ -40,6 +49,17 @@ EYE_FEATURE_NAMES: Dict[str, str] = {
     "EyeWhite": "EyeWhite",
 }
 
+# Inverted ARKit .001 names from when `.001` broke category parse (Eye.Iris vs Iris.Eye)
+WORKFLOW_REPAIR: Dict[str, str] = {
+    "Eye.Highlight": "EyeHighlight.Eye",
+    "Eye.Iris": "Iris.Eye",
+    "Eye.White": "EyeWhite.Eye",
+    "Face.Brow": "Brow.Face",
+    "Face.Eyelash": "Eyelash.Face",
+    "Face.Eyeline": "Eyeline.Face",
+    "Face.Mouth": "Mouth.Face",
+}
+
 DRY_RUN = True
 
 
@@ -52,13 +72,22 @@ def strip_instance_suffix(name: str) -> str:
     return INSTANCE_SUFFIX.sub("", name)
 
 
+def split_blender_dup_suffix(name: str) -> Tuple[str, str]:
+    """Split trailing `.001` Blender duplicate suffix. Returns (base, suffix_or_empty)."""
+    match = BLENDER_DUP_SUFFIX.search(name)
+    if not match:
+        return name, ""
+    return name[: match.start()], match.group(1)
+
+
 def strip_vroid_slot_prefix(name: str) -> str:
     """Remove leading N{xx}_{xxx}_{slot}_ import prefix."""
     bare = strip_instance_suffix(name)
-    m = VRoid_HAIR_STRAND_PREFIX.match(bare)
-    if m:
-        return f"Hair_00_HAIR_{m.group(1)}"
-    return VRoid_SLOT_PREFIX.sub("", bare)
+    base, _dup = split_blender_dup_suffix(bare)
+    hair = VRoid_HAIR_MAT.match(base)
+    if hair:
+        return hair.group(1)
+    return VRoid_SLOT_PREFIX.sub("", base)
 
 
 def _title_word(word: str) -> str:
@@ -82,12 +111,18 @@ def standardize_workflow_tail(tail: str) -> str:
     if not tail:
         return tail
 
-    # Clothing: Shoes_01_CLOTH → Shoes.Cloth; Tops_01_CLOTH_01 → Hoodie_01.Cloth
-    cloth = re.match(r"^([A-Za-z]+)_(\d{2})_CLOTH(?:_(\d+))?$", tail)
+    tail, _dup = split_blender_dup_suffix(tail)
+
+    # Clothing: Shoes_01_CLOTH → Shoes.Cloth; Accessory_RabbitEar_01_CLOTH → RabbitEar.Cloth
+    # Optional Accessory_ prefix (VRoid item accessories).
+    cloth = re.match(
+        r"^(?:Accessory_)?([A-Za-z]+)_(\d{2})_CLOTH(?:_(\d+))?$",
+        tail,
+    )
     if cloth:
         item, slot, layer = cloth.group(1), cloth.group(2), cloth.group(3)
         base_key = f"{item}_{slot}_CLOTH"
-        item_name = CLOTHING_ITEM_ALIASES.get(base_key, _title_word(item))
+        item_name = CLOTHING_ITEM_ALIASES.get(base_key, item)
         if layer:
             return f"{item_name}_{layer}.Cloth"
         return f"{item_name}.Cloth"
@@ -95,11 +130,16 @@ def standardize_workflow_tail(tail: str) -> str:
     # Category separator _00_ (Face_00_SKIN, FaceMouth_00_FACE, Hair_00_HAIR_01)
     if "_00_" in tail:
         left, right = tail.split("_00_", 1)
+        right, _ = split_blender_dup_suffix(right)
         category = _title_word(right.lower())
 
         strand = re.match(r"^HAIR_(\d+)$", right)
         if strand:
             return f"Hair.{strand.group(1)}"
+
+        # Primary / non-stranded hair: Hair_00_HAIR → Hair.Back
+        if left == "Hair" and right == "HAIR":
+            return "Hair.Back"
 
         region, sub = _split_region_subpart(left)
 
@@ -123,25 +163,58 @@ def standardize_workflow_tail(tail: str) -> str:
 def apply_workflow_material_name(cleaned: str) -> str:
     if cleaned.startswith("MToon Outline ("):
         inner = cleaned[len("MToon Outline (") : -1]
-        workflow = standardize_workflow_tail(inner)
-        if workflow != inner:
-            return f"MToon Outline ({workflow})"
-        return cleaned
+        workflow = clean_vroid_material_name(inner)
+        return f"MToon Outline ({workflow})"
     return standardize_workflow_tail(cleaned)
 
 
 def clean_vroid_material_name(name: str) -> str:
-    cleaned = strip_vroid_slot_prefix(name)
-    return apply_workflow_material_name(cleaned)
+    """Full import / botched / inverted name → workflow name (keeps `.001` suffix)."""
+    if name.startswith("MToon Outline ("):
+        inner = name[len("MToon Outline (") :]
+        if inner.endswith(")"):
+            inner = inner[:-1]
+        return f"MToon Outline ({clean_vroid_material_name(inner)})"
+
+    bare = strip_instance_suffix(name)
+    base, dup = split_blender_dup_suffix(bare)
+
+    if base in WORKFLOW_REPAIR:
+        return WORKFLOW_REPAIR[base] + dup
+
+    if BROKEN_FACE_SKIN_INNER.match(base):
+        return "Face.Skin" + dup
+
+    hair = VRoid_HAIR_MAT.match(base)
+    if hair:
+        stripped = hair.group(1)
+    else:
+        stripped = VRoid_SLOT_PREFIX.sub("", base)
+
+    workflow = standardize_workflow_tail(stripped)
+    return workflow + dup
 
 
 def needs_cleanup(name: str) -> bool:
+    if name.startswith("MToon Outline ("):
+        inner = name[len("MToon Outline (") :]
+        if inner.endswith(")"):
+            inner = inner[:-1]
+        return needs_cleanup(inner) or clean_vroid_material_name(name) != name
+
     bare = strip_instance_suffix(name)
-    if VRoid_SLOT_PREFIX.search(bare):
+    base, _dup = split_blender_dup_suffix(bare)
+    if base in WORKFLOW_REPAIR:
         return True
-    if VRoid_HAIR_STRAND_PREFIX.match(bare):
+    if BROKEN_FACE_SKIN_INNER.match(base):
         return True
-    return False
+    if VRoid_HAIR_MAT.match(base):
+        return True
+    if VRoid_SLOT_PREFIX.search(base):
+        return True
+    if VRoid_HAIR_STRAND_PREFIX.match(base):
+        return True
+    return clean_vroid_material_name(name) != name
 
 
 def load_stored_rename_map(scene: Optional[bpy.types.Scene] = None) -> Dict[str, str]:
@@ -176,6 +249,28 @@ def _intermediate_stripped_name(name: str) -> str:
 
 def _clothing_variants(token: str) -> List[str]:
     variants = {token}
+    # RabbitEar.Cloth ↔ Accessory_RabbitEar_01_CLOTH / RabbitEar_01_CLOTH
+    cloth_wf = re.match(r"^([A-Za-z]+)(?:_(\d+))?\.Cloth$", token)
+    if cloth_wf:
+        item, layer = cloth_wf.group(1), cloth_wf.group(2)
+        base = f"{item}_01_CLOTH"
+        variants.add(base)
+        variants.add(f"Accessory_{base}")
+        if layer:
+            variants.add(f"{base}_{layer}")
+            variants.add(f"Accessory_{base}_{layer}")
+    acc = re.match(r"^(?:Accessory_)?([A-Za-z]+)_(\d{2})_CLOTH(?:_(\d+))?$", token)
+    if acc:
+        item, slot, layer = acc.group(1), acc.group(2), acc.group(3)
+        base_key = f"{item}_{slot}_CLOTH"
+        friendly = CLOTHING_ITEM_ALIASES.get(base_key, item)
+        if layer:
+            variants.add(f"{friendly}_{layer}.Cloth")
+        else:
+            variants.add(f"{friendly}.Cloth")
+        variants.add(base_key)
+        variants.add(f"Accessory_{base_key}")
+
     for vroid_base, friendly in CLOTHING_ITEM_ALIASES.items():
         if token == f"{friendly}.Cloth":
             variants.add(vroid_base)

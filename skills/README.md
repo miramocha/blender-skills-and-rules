@@ -68,11 +68,17 @@ flowchart TB
     LOG[blender-skill-log]
   end
 
+  subgraph optionalFace [optional face]
+    MMD[arkit-vroid-mmd-shapekeys]
+  end
+
   J --> MTOON
   F --> SHAPE
   G --> BONE
   H --> BONE
   K --> BC
+  F -.-> MMD
+  D -.-> MMD
   orchestrator --> LOG
   topology --> LOG
   orchestrator --> topology
@@ -87,6 +93,7 @@ flowchart TB
 | [hair-tris-to-quad](hair-tris-to-quad/SKILL.md) | Strand `Hair` mesh — `tris_convert_to_quads` at 90°/90° plus `Hair.Cap` / `Hair.Strip` vertex groups |
 | [mtoon-material-sync](mtoon-material-sync/SKILL.md) | Sync MToon 1.0 rim + Shading Toony from a reference material (default `Face.Skin`). Also cleanup **Phase J** |
 | [vroid-shapekey-remap](vroid-shapekey-remap/SKILL.md) | `Fcl_*` → `vroid*` lower camelCase. Cleanup **Phase F** |
+| [arkit-vroid-mmd-shapekeys](arkit-vroid-mmd-shapekeys/SKILL.md) | Create Animasa MMD morph names from ARKit / VRoid sources (sources kept). Standalone after Phase D/F |
 | [blender-bone-remap](blender-bone-remap/SKILL.md) | Custom bone naming (`.l`/`.r`, hair strands). Cleanup **Phase G** + collider rename **Phase H** |
 | [blender-bone-collections](blender-bone-collections/SKILL.md) | Hair / Body / Clothing bone collections. Cleanup **Phase K** |
 | [uv-topology-symmetry](uv-topology-symmetry/SKILL.md) | UV mirror audit and `TriQuad.*` vertex groups after tri→quad |

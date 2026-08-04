@@ -19,7 +19,7 @@ Phase B stores `scene["vroid_material_rename_map"]` (`source → workflow`).
 1. Strip `N{xx}_{xxx}_{slot}_` import prefix and ` (Instance)`
 2. VRoid `_00_` is a **category separator** → replace with `.` + Title Case
 3. `_00_FACE` category → `{Feature}.Face` (e.g. `FaceMouth` → `Mouth.Face`). `_00_EYE` → `{Feature}.Eye` (e.g. `EyeIris_00_EYE` → `Iris.Eye`, `EyeHighlight_00_EYE` → `EyeHighlight.Eye`). Other: `Face_00_SKIN` → `Face.Skin`
-4. Clothing `_01_CLOTH` → `{Item}.Cloth`; layered → `{ItemAlias}_{NN}.Cloth` (e.g. `Hoodie_01.Cloth`)
+4. Clothing `_01_CLOTH` → `{Item}.Cloth`; strip optional `Accessory_` prefix (`Accessory_RabbitEar_01_CLOTH` → `RabbitEar.Cloth`); layered → `{ItemAlias}_{NN}.Cloth` (e.g. `Hoodie_01.Cloth`)
 
 ## Workflow name table (this project)
 
@@ -38,6 +38,8 @@ Phase B stores `scene["vroid_material_rename_map"]` (`source → workflow`).
 | `Hair_00_HAIR_{NN}` | `Hair.{NN}` |
 | `Shoes_01_CLOTH` | `Shoes.Cloth` |
 | `Tops_01_CLOTH_{NN}` | `Hoodie_{NN}.Cloth` |
+| `Accessory_RabbitEar_01_CLOTH` | `RabbitEar.Cloth` |
+| `Accessory_RabbitTail_01_CLOTH` | `RabbitTail.Cloth` |
 
 ## Lookup
 

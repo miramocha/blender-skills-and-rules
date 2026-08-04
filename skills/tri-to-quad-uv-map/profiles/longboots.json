@@ -1,0 +1,14 @@
+{
+  "profile": "longboots",
+  "label": "VRoid long boots / Shoes.Cloth UV (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/longboots-quad-dissolve.csv",
+  "material_token": "Shoes.Cloth",
+  "notes": "Shoes.Cloth long-boots outfit UV. Source LongBoots.NormalSrc (tris) → result LongBoots (quads). Export CSV after manual tri→quad. Skips if map CSV missing or empty.",
+  "reference": {
+    "source_object": "LongBoots.NormalSrc",
+    "result_object": "LongBoots"
+  }
+}
