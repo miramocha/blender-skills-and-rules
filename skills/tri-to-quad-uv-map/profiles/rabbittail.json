@@ -1,0 +1,14 @@
+{
+  "profile": "rabbittail",
+  "label": "VRoid rabbit tail accessory UV (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/rabbittail-quad-dissolve.csv",
+  "material_token": "RabbitTail.Cloth",
+  "notes": "RabbitTail.Cloth accessory (outfit-specific UV). Source RabbitTail.NormalSrc (tris) → result RabbitTail (quads). Skips if map CSV missing or empty.",
+  "reference": {
+    "source_object": "RabbitTail.NormalSrc",
+    "result_object": "RabbitTail"
+  }
+}
