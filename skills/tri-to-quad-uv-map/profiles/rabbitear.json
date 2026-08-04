@@ -1,0 +1,14 @@
+{
+  "profile": "rabbitear",
+  "label": "VRoid rabbit ear accessory UV (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/rabbitear-quad-dissolve.csv",
+  "material_token": "RabbitEar.Cloth",
+  "notes": "RabbitEar.Cloth accessory (outfit-specific UV). Source RabbitEar.NormalSrc (tris) → result RabbitEar (quads). Skips if map CSV missing or empty.",
+  "reference": {
+    "source_object": "RabbitEar.NormalSrc",
+    "result_object": "RabbitEar"
+  }
+}
