@@ -6,9 +6,9 @@
   "co_precision": 6,
   "map_file": "maps/body-socks-quad-dissolve.csv",
   "material_token": "Body.Skin",
-  "notes": "Body.Skin with socks/alternate feet UV. Source Body.001 (tris) → result Body.Quad.",
+  "notes": "Body.Skin with socks/alternate feet UV. Source body.base.socks.pre_t2q (all tris) → body.base.socks (quads + native tris). Includes feet island mirror dissolves. joins=4504.",
   "reference": {
-    "source_object": "Body.001",
-    "result_object": "Body.Quad"
+    "source_object": "body.base.socks.pre_t2q",
+    "result_object": "body.base.socks"
   }
 }

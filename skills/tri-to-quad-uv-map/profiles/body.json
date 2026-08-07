@@ -6,7 +6,7 @@
   "co_precision": 6,
   "map_file": "maps/body-quad-dissolve.csv",
   "material_token": "Body.Skin",
-  "notes": "Body.Skin slot on Body mesh. Auto-picks default vs socks feet map by UV fit dry-run.",
+  "notes": "Body.Skin on Body mesh. When map_path omitted, choose_map_variant() UV-compares default vs socks CSVs (coverage then dissolve fit) and applies the winner. Use profile body-socks only to force the socks map.",
   "reference": {
     "source_object": "Body",
     "result_object": "Body.Quad"
@@ -14,12 +14,12 @@
   "map_variants": [
     {
       "id": "default",
-      "label": "Default feet (reference body)",
+      "label": "Default feet (reference body / boots template)",
       "map_file": "maps/body-quad-dissolve.csv"
     },
     {
       "id": "socks",
-      "label": "Socks / alternate feet",
+      "label": "Socks / alternate feet (body.base.socks)",
       "map_file": "maps/body-socks-quad-dissolve.csv"
     }
   ]

@@ -3,7 +3,9 @@ name: tri-to-quad-uv-map
 description: >-
   Replay tri→quad topology on Blender meshes that share the same VRoid UV layout.
   UV-keyed edge dissolve from CSV maps; optional material_token filters by Phase B
-  workflow name (e.g. Face.Skin, Hair.Back on Body). Skips when map file is missing or empty.
+  workflow name (e.g. Face.Skin, Hair.Back on Body). Body profile auto-picks default
+  vs socks feet map via UV atlas compare when the user does not name a variant.
+  Skips when map file is missing or empty.
 ---
 
 # Tri-to-quad UV map
@@ -24,6 +26,7 @@ JSON in `profiles/` — e.g. `face.json`:
 | Field | Purpose |
 |-------|---------|
 | `map_file` | CSV path relative to skill root |
+| `map_variants` | Optional list of `{id,label,map_file}` — auto-picked by UV compare |
 | `material_token` | Workflow material name (`Face.Skin`) — resolved via Phase B `resolve_material_by_token()` |
 | `uv_layer` | Usually `UVMap` |
 
@@ -39,11 +42,41 @@ One profile per **material slot**, not per object. Run multiple profiles against
 | `iris` | `Iris.Eye` | `Iris` / eye slot | ✓ |
 | `eyehighlight` | `EyeHighlight.Eye` | eye slot | ✓ |
 | `eyewhite` | `EyeWhite.Eye` | `EyeWhite` | ✓ |
-| `body` | `Body.Skin` | `Body` | — |
+| `body` | `Body.Skin` | `Body` / body skin mesh | ✓ (auto: default / socks) |
+| `body-socks` | `Body.Skin` | force socks feet map only | ✓ |
 | `hairback` | `Hair.Back` | `Body` (slot 1) / `HairBack` | ✓ |
 | `longboots` | `Shoes.Cloth` | `LongBoots` / shoe slot | ✓ |
 
 Clothing slots on `Body` (`Hoodie.Cloth`, …) are outfit-specific unless a profile/CSV exists (`longboots` for `Shoes.Cloth`).
+
+### Body: default vs socks (agent rule)
+
+Feet UV atlas differs (loafer / long-boots template vs socks). **Do not ask** which body map unless the user names it.
+
+| User intent | Call |
+|-------------|------|
+| Body tri→quad, unspecified feet | `apply_profile("body", target_obj=…)` |
+| Explicit socks feet | `apply_profile("body-socks", …)` **or** `body` (auto will pick socks) |
+| Explicit default / boots feet | `apply_profile("body", map_path=…/body-quad-dissolve.csv)` |
+
+`apply_profile("body")` when `map_path` is omitted runs `choose_map_variant()`:
+
+1. Collect **all** mesh UV keys (full atlas — shoe UVs often not on `Body.Skin`)
+2. Score each `map_variants` CSV by **exclusive UV coverage** (UVs only in that map ∩ mesh / exclusive size) — separates socks vs boots feet
+3. Tie-break with UV F1, then dissolve-edge dry-run `applied` + `fit_ratio` (dissolve still respects `Body.Skin` slots when present)
+4. Apply the winning CSV (`default` → `body-quad-dissolve.csv`, `socks` → `body-socks-quad-dissolve.csv`)
+
+If `Body.Skin` is not on the object yet (VRoid import material name), dissolve audit also uses all faces; variant UV pick always uses full-mesh UVs.
+
+```python
+# Preferred — auto UV compare picks default vs socks
+result = tq.apply_profile("body", target_obj="Body", dry_run=False)
+print(result.get("map_variant"), result.get("map_variant_label"))
+
+# Audit only
+choice = tq.choose_map_variant("body", "body.base.socks")
+# choice["chosen_variant"] == "socks" | "default"
+```
 
 ## MCP / Scripting
 
@@ -65,6 +98,9 @@ if result.get("skipped"):
 
 result = tq.apply_profile("face", target_obj="Face", dry_run=False)
 # result["elapsed_ms"] — profile wall time; see blender-skill-log skill_execution.log
+
+# Body skin — never hard-code socks vs default when user did not specify
+tq.apply_profile("body", target_obj="Body", dry_run=False)
 ```
 
 ## Skip reasons
@@ -73,11 +109,12 @@ result = tq.apply_profile("face", target_obj="Face", dry_run=False)
 |----------|---------|
 | `map_not_found` | Profile CSV/JSON map file does not exist |
 | `empty_map` | Map file has no dissolve rows |
+| `no_usable_map_variant` | Body (etc.) variants all missing/empty/no UV fit |
+| `map_not_chosen` | Variant picker returned no path |
 | `material_not_found` | `material_token` not in `bpy.data.materials` |
 | `material_not_on_object` | Material exists but not assigned to target mesh |
 | `mesh_object_not_found` | Invalid target object |
 | `material_resolver_unavailable` | Phase B cleanup tools not on disk |
-| `material_not_found` | Token not in scene — re-run Phase B workflow rename or check slot assignment |
 | `shape_keys_addon_unavailable` | Mesh has shape keys but **Apply Modifiers With Shape Keys** addon not enabled |
 
 ## Material filter
@@ -91,6 +128,7 @@ Examples:
 
 ```python
 # Body: skin then back-of-head hair (same UV atlas, different slots)
+# "body" auto-selects default vs socks feet map via UV compare
 tq.apply_profile("body", target_obj="Body", dry_run=False)
 tq.apply_profile("hairback", target_obj="Body", dry_run=False)
 ```
@@ -145,6 +183,7 @@ When the target has shape keys and normal transfer succeeds, the pre-topology du
 
 ```python
 # Default: dissolve + normal transfer (Body.only, no shape keys)
+# Auto-picks default vs socks map
 tq.apply_profile("body", target_obj="Body.only", dry_run=False)
 
 # Face with ARKit shape keys — normal transfer when addon enabled

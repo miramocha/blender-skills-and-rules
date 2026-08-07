@@ -15,6 +15,11 @@ MCP / Scripting:
   if result.get("skipped"):
       print(result["reason"])
   tq.apply_profile("face", target_obj="Face", dry_run=False)
+
+  # Body: do not pick default vs socks yourself — apply_profile("body") UV-compares
+  # map variants and chooses body-quad-dissolve.csv or body-socks-quad-dissolve.csv.
+  tq.apply_profile("body", target_obj="Body")
+  choice = tq.choose_map_variant("body", "Body")  # audit only
 """
 
 from __future__ import annotations
@@ -1001,6 +1006,90 @@ def _resolve_material_slots(
     return allowed_slots, resolved_material, None
 
 
+def mesh_uv_keys(
+    obj_name: str,
+    *,
+    uv_layer: str = "UVMap",
+    uv_precision: int = DEFAULT_UV_PREC,
+    material_slot_indices: Set[int] | None = None,
+) -> set[tuple[float, float]]:
+    """Unique rounded UV keys on mesh (optionally limited to material slots).
+
+    Reads bmesh when the object is in Edit Mode — ``mesh.uv_layers.data`` is empty there.
+    """
+    obj = bpy.data.objects.get(obj_name)
+    if obj is None or obj.type != "MESH":
+        return set()
+    mesh = obj.data
+    keys: set[tuple[float, float]] = set()
+
+    if obj.mode == "EDIT":
+        bm = bmesh.from_edit_mesh(mesh)
+        uv = bm.loops.layers.uv.get(uv_layer) or bm.loops.layers.uv.active
+        if uv is None:
+            return set()
+        for face in bm.faces:
+            if material_slot_indices is not None and face.material_index not in material_slot_indices:
+                continue
+            for loop in face.loops:
+                co = loop[uv].uv
+                keys.add((round(float(co.x), uv_precision), round(float(co.y), uv_precision)))
+        return keys
+
+    uv_data = mesh.uv_layers.get(uv_layer) or mesh.uv_layers.active
+    if uv_data is None or len(uv_data.data) == 0:
+        return set()
+    for poly in mesh.polygons:
+        if material_slot_indices is not None and poly.material_index not in material_slot_indices:
+            continue
+        for li in poly.loop_indices:
+            uv = uv_data.data[li].uv
+            keys.add((round(float(uv.x), uv_precision), round(float(uv.y), uv_precision)))
+    return keys
+
+
+def map_uv_keys(map_path: str | Path, *, uv_precision: int | None = None) -> set[tuple[float, float]]:
+    """Unique UV endpoints from a dissolve CSV/JSON map."""
+    data = load_map(map_path)
+    prec = int(uv_precision if uv_precision is not None else data.get("uv_precision", DEFAULT_UV_PREC))
+    keys: set[tuple[float, float]] = set()
+    for a, b in _iter_target_edges(data):
+        keys.add((round(a[0], prec), round(a[1], prec)))
+        keys.add((round(b[0], prec), round(b[1], prec)))
+    return keys
+
+
+def uv_overlap_score(
+    mesh_keys: set[tuple[float, float]],
+    map_keys: set[tuple[float, float]],
+) -> dict[str, Any]:
+    """How well map UV endpoints sit on the target mesh atlas."""
+    if not map_keys:
+        return {
+            "overlap": 0,
+            "map_uv_count": 0,
+            "mesh_uv_count": len(mesh_keys),
+            "coverage": 0.0,
+            "precision": 0.0,
+            "f1": 0.0,
+        }
+    overlap = mesh_keys & map_keys
+    coverage = len(overlap) / len(map_keys)
+    precision = len(overlap) / len(mesh_keys) if mesh_keys else 0.0
+    if coverage + precision > 0:
+        f1 = 2.0 * coverage * precision / (coverage + precision)
+    else:
+        f1 = 0.0
+    return {
+        "overlap": len(overlap),
+        "map_uv_count": len(map_keys),
+        "mesh_uv_count": len(mesh_keys),
+        "coverage": round(coverage, 4),
+        "precision": round(precision, 4),
+        "f1": round(f1, 4),
+    }
+
+
 def choose_map_variant(
     profile_name: str,
     target_obj: str,
@@ -1009,10 +1098,15 @@ def choose_map_variant(
     uv_layer: str | None = None,
     material_token: str | None = None,
 ) -> dict[str, Any]:
-    """Pick best map for target mesh by dry-run UV edge fit across profile variants."""
+    """Pick best map for target mesh: UV atlas overlap, then dissolve-edge dry-run fit.
+
+    Used by ``apply_profile("body")`` when ``map_variants`` lists default + socks CSVs.
+    Prefer this over hard-coding ``body-socks`` unless the user names that profile.
+    """
     prof = Profile.load(profile_name, profiles_dir)
     token = material_token if material_token is not None else prof.material_token
     layer = uv_layer or prof.uv_layer
+    prec = int(prof.uv_precision)
 
     variants: list[dict[str, str]] = list(prof.map_variants)
     if not variants:
@@ -1026,6 +1120,7 @@ def choose_map_variant(
         }
 
     allowed_slots: Set[int] | None = None
+    material_filter_note: str | None = None
     if token:
         allowed_slots, _, skip = _resolve_material_slots(
             target_obj,
@@ -1034,9 +1129,25 @@ def choose_map_variant(
             map_path=str(prof.map_path),
         )
         if skip is not None:
-            return skip
+            # Still auto-pick by full-mesh UV when Body.Skin (etc.) not on object yet
+            # (e.g. socks still on VRoid import material name).
+            if skip.get("reason") == "material_not_on_object":
+                allowed_slots = None
+                material_filter_note = "material_not_on_object_fallback_all_uv"
+            else:
+                return skip
+
+    mesh_keys = mesh_uv_keys(
+        target_obj,
+        uv_layer=layer,
+        uv_precision=prec,
+        # Variant UV compare must see feet/shoe atlas UVs (often not on Body.Skin).
+        material_slot_indices=None,
+    )
+    dissolve_slots = allowed_slots
 
     audits: list[dict[str, Any]] = []
+    variant_map_keys: dict[str, set[tuple[float, float]]] = {}
     for variant in variants:
         variant_id = variant.get("id", "")
         label = variant.get("label", variant_id)
@@ -1052,18 +1163,53 @@ def choose_map_variant(
                     "applied": 0,
                     "targets": 0,
                     "fit_ratio": 0.0,
+                    "uv_coverage": 0.0,
+                    "uv_precision_on_mesh": 0.0,
+                    "uv_f1": 0.0,
+                    "uv_exclusive_coverage": 0.0,
+                    "uv_overlap": 0,
                 }
             )
             continue
+        mkeys = map_uv_keys(variant_path, uv_precision=prec)
+        variant_map_keys[variant_id] = mkeys
         audit = audit_map_fit(
             target_obj,
             variant_path,
             uv_layer=layer,
-            material_slot_indices=allowed_slots,
+            material_slot_indices=dissolve_slots,
         )
+        uv_score = uv_overlap_score(mesh_keys, mkeys)
         audit["variant_id"] = variant_id
         audit["label"] = label
+        audit["map"] = str(variant_path)
+        audit["uv_coverage"] = uv_score["coverage"]
+        audit["uv_precision_on_mesh"] = uv_score["precision"]
+        audit["uv_f1"] = uv_score["f1"]
+        audit["uv_overlap"] = uv_score["overlap"]
+        audit["uv_map_count"] = uv_score["map_uv_count"]
         audits.append(audit)
+
+    # Exclusive UV keys: present in this map but not in sibling variants (socks vs boots feet).
+    for audit in audits:
+        if audit.get("skipped"):
+            audit["uv_exclusive_coverage"] = 0.0
+            audit["uv_exclusive_hit"] = 0
+            audit["uv_exclusive_count"] = 0
+            continue
+        vid = audit["variant_id"]
+        mine = variant_map_keys.get(vid, set())
+        others: set[tuple[float, float]] = set()
+        for oid, keys in variant_map_keys.items():
+            if oid != vid:
+                others |= keys
+        exclusive = mine - others
+        hit = exclusive & mesh_keys
+        audit["uv_exclusive_count"] = len(exclusive)
+        audit["uv_exclusive_hit"] = len(hit)
+        audit["uv_exclusive_coverage"] = (
+            round(len(hit) / len(exclusive), 4) if exclusive else 0.0
+        )
 
     candidates = [
         audit
@@ -1078,23 +1224,38 @@ def choose_map_variant(
             "chosen_variant": None,
             "chosen_map": None,
             "audits": audits,
+            "mesh_uv_count": len(mesh_keys),
             "error": "no_usable_map_variant",
         }
 
+    # Prefer exclusive-UV coverage (discriminates socks vs default feet), then F1, then dissolve.
     best = max(
         candidates,
-        key=lambda audit: (int(audit.get("applied", 0)), float(audit.get("fit_ratio", 0.0))),
+        key=lambda audit: (
+            float(audit.get("uv_exclusive_coverage", 0.0)),
+            int(audit.get("uv_exclusive_hit", 0)),
+            float(audit.get("uv_f1", 0.0)),
+            int(audit.get("applied", 0)),
+            float(audit.get("fit_ratio", 0.0)),
+        ),
     )
     return {
         "profile": profile_name,
         "object": target_obj,
         "auto_select": True,
+        "selection_method": "uv_exclusive_then_f1_then_dissolve_fit",
         "chosen_variant": best.get("variant_id"),
         "chosen_label": best.get("label"),
         "chosen_map": best.get("map"),
         "chosen_applied": best.get("applied"),
         "chosen_targets": best.get("targets"),
         "chosen_fit_ratio": best.get("fit_ratio"),
+        "chosen_uv_coverage": best.get("uv_coverage"),
+        "chosen_uv_f1": best.get("uv_f1"),
+        "chosen_uv_exclusive_coverage": best.get("uv_exclusive_coverage"),
+        "chosen_uv_overlap": best.get("uv_overlap"),
+        "mesh_uv_count": len(mesh_keys),
+        "material_filter_note": material_filter_note,
         "audits": audits,
     }
 
@@ -1493,6 +1654,9 @@ def apply_profile(
     if map_choice and map_choice.get("auto_select"):
         result["map_variant"] = map_choice.get("chosen_variant")
         result["map_variant_label"] = map_choice.get("chosen_label")
+        result["map_variant_uv_coverage"] = map_choice.get("chosen_uv_coverage")
+        result["map_variant_uv_exclusive_coverage"] = map_choice.get("chosen_uv_exclusive_coverage")
+        result["map_selection_method"] = map_choice.get("selection_method")
         result["map_selection"] = map_choice
     if token:
         result["material_token"] = token
