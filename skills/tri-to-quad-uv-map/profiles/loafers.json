@@ -1,0 +1,14 @@
+{
+  "profile": "loafers",
+  "label": "VRoid loafers / Shoes.Cloth UV (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/loafers-quad-dissolve.csv",
+  "material_token": "Shoes.Cloth",
+  "notes": "Shoes.Cloth loafer outfit UV (socks-body shoe template). Source Loafers.pre_t2q (all tris) → Loafers (198 quads + 144 tris). joins=99. Distinct from longboots map.",
+  "reference": {
+    "source_object": "Loafers.pre_t2q",
+    "result_object": "Loafers"
+  }
+}
