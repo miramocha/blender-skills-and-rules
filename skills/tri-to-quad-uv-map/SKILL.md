@@ -19,6 +19,33 @@ description: >-
 - **Body object** (`Body` mesh): `Body.Skin`, **`Hair.Back`** — back-of-head hair is a **material slot on Body**, same fixed body UV atlas (not the strand `Hair` mesh)
 - **`Hair` object** (strand layers `Hair.{NN}`) → use [hair-tris-to-quad](../hair-tris-to-quad/SKILL.md) instead (UV atlas varies per hairstyle)
 
+## Order gate — ARKit before tri→quad
+
+**ARKit shape keys (cleanup Phase D) must be applied BEFORE any tri→quad run on that mesh.** Beyond Expressions `transfer_shapekeys` matches the donor `VROID_*_Face` topology; on a dissolved (quad) mesh the match degrades and transferred keys land **offset**.
+
+| Mesh state | Action |
+|---|---|
+| Tris, no ARKit yet | Run Phase D (+ E) first, **then** tri→quad |
+| Tris, ARKit already present | Tri→quad OK |
+| Already quads, ARKit missing | **Do not** transfer onto it — restore pre-tri→quad `.blend` (or `{Object}.old` archive), run D there, redo tri→quad |
+
+Check before running any profile on a face mesh:
+
+```python
+sk = bpy.data.objects["Face"].data.shape_keys
+arkit_present = bool(sk) and any(k.name.startswith("_") for k in sk.key_blocks)
+```
+
+Same gate for later ARKit-dependent work ([arkit-vroid-mmd-shapekeys](../arkit-vroid-mmd-shapekeys/SKILL.md) MMD bakes): source keys must exist before topology changes.
+
+After tri→quad on a shape-key mesh, **verify** keys did not shift — offsets are silent:
+
+```python
+# per-key max |delta| vs Basis; ARKit/vroid keys should stay in expected local range
+kb, basis = sk.key_blocks["_mouthUpperUpLeft"], sk.key_blocks["Basis"]
+max_d = max((kb.data[i].co - basis.data[i].co).length for i in range(len(kb.data)))
+```
+
 ## Profiles
 
 JSON in `profiles/` — e.g. `face.json`:

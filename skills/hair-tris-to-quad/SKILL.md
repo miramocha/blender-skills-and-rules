@@ -14,6 +14,10 @@ description: >-
 - **Not** `Hair.Back` — that is a **`Body` material slot** (fixed body UV atlas). Use [tri-to-quad-uv-map](../tri-to-quad-uv-map/SKILL.md) profile `hairback` on `Body` instead
 - **Not** face/mouth/eye slots — those use fixed UV CSV dissolve maps in tri-to-quad-uv-map
 
+## Order gate
+
+If the mesh carries (or will carry) ARKit shape keys, run cleanup **Phase D first** — `tris_convert_to_quads` changes topology and a later Beyond `transfer_shapekeys` lands **offset**. See [vroid-vrm-blender-cleanup](../vroid-vrm-blender-cleanup/SKILL.md) agent rules.
+
 ## Method
 
 1. **Vertex groups** (from UV cap detection on tris): `Hair.Cap`, `Hair.Strip`

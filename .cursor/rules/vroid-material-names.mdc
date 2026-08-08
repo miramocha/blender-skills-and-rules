@@ -36,10 +36,21 @@ Phase B stores `scene["vroid_material_rename_map"]` (`source → workflow`).
 | `EyeWhite_00_EYE` | `EyeWhite.Eye` |
 | `HairBack_00_HAIR` | `Hair.Back` |
 | `Hair_00_HAIR_{NN}` | `Hair.{NN}` |
+| `Hair_00_HAIR` (bare, no `{NN}`) | `Hair.01` — see caveat |
 | `Shoes_01_CLOTH` | `Shoes.Cloth` |
 | `Tops_01_CLOTH_{NN}` | `Hoodie_{NN}.Cloth` |
 | `Accessory_RabbitEar_01_CLOTH` | `RabbitEar.Cloth` |
 | `Accessory_RabbitTail_01_CLOTH` | `RabbitTail.Cloth` |
+
+## Caveat — bare `Hair_00_HAIR`
+
+Single-material hairstyles export as `N00_000_Hair_00_HAIR (Instance)` with no `_{NN}` layer suffix. It belongs to the strand **`Hair` object**, not the `Body` back-of-head slot.
+
+`clean_vroid_material_names.py` currently maps this case to **`Hair.Back`** (rule "primary / non-stranded hair"). That name is misleading: `Hair.Back` is the [tri-to-quad-uv-map](../../skills/tri-to-quad-uv-map/SKILL.md) `hairback` profile token, whose CSV assumes the fixed **body** UV atlas — replaying it on a strand mesh would dissolve against the wrong atlas.
+
+Agent action after Phase B on a single-material hairstyle: rename `Hair.Back` → **`Hair.01`**, and patch matching values in `scene["vroid_material_rename_map"]`. Do this **before Phase C** so texture slugs come out `hair_01_base` / `hair_01_normal` rather than `hair_back_*`.
+
+Reserve `Hair.Back` for a material actually assigned to a `Body` slot.
 
 ## Lookup
 

@@ -111,6 +111,8 @@ flowchart TD
 - **Never guess `body_type`** — required for D/E (`male` | `female`)
 - If no `body_type`: run **A→B→C→J→F→G→K→H→I**, skip D/E with reason
 - Every destructive step: **dry-run → stop for approval → apply → verify**
+- **Phase D runs before any topology change.** ARKit transfer needs original VRoid **tri** topology; tri→quad, merge, separate-by-material, decimate, or remesh first makes Beyond `transfer_shapekeys` land **offset**. Order: full pipeline (A–K, incl. D/E) → **then** [tri-to-quad-uv-map](../tri-to-quad-uv-map/SKILL.md) / [hair-tris-to-quad](../hair-tris-to-quad/SKILL.md) → then MMD bakes
+- If a mesh is already quads and needs ARKit: restore the pre-tri→quad `.blend` (or `{Object}.old` archive), run D there, redo tri→quad — do **not** transfer onto quad topology
 - Remind user to **save .blend** after Phase C (disk textures) and at end
 
 ## Progress checklist
@@ -198,6 +200,8 @@ result = run_phase_b(dry_run=False)  # after approval
 ```
 
 Re-run Phase B once after Phase C to catch `.001` materials that still carry `N00_*`.
+
+Single-material hairstyles: Phase B maps bare `Hair_00_HAIR` → `Hair.Back`, which is the **`Body` back-of-head slot** token. On a strand `Hair` object, rename it to `Hair.01` (and patch `scene["vroid_material_rename_map"]`) **before Phase C**, so texture slugs land as `hair_01_*`. See the `vroid-material-names` rule.
 
 ### Phase C — MToon textures
 

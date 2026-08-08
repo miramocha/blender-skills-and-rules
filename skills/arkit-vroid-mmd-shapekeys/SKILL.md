@@ -16,6 +16,8 @@ description: >-
 - Face already has ARKit and/or VRoid (`vroid*` or `Fcl_*`) shape keys
 - After cleanup **Phase D** (ARKit) and preferably **Phase F** (`Fcl_*` → `vroid*`)
 
+**Order:** Phase D (ARKit) → tri→quad → MMD bakes. ARKit must be transferred on original **tri** topology; transferring after tri→quad yields offset keys, and MMD bakes inherit the offset.
+
 Requires **Blender MCP** (`execute_blender_code`) or running [tools/map_mmd_shapekeys.py](tools/map_mmd_shapekeys.py) in Blender.
 
 **Not** part of `run_full_pipeline()` — run standalone when MMD names needed.
