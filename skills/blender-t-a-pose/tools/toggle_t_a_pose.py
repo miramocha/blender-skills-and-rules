@@ -25,6 +25,8 @@ UPPER_LEG_R = ("upperLeg.r", "UpperLeg_R", "J_Bip_R_UpperLeg")
 
 DEFAULT_A_POSE_ANGLE_DEG = 35.0
 DEFAULT_LEG_SPREAD_DEG = 8.0
+# Weight-work A rest uses wider legs (see a_pose_weight_work.py).
+DEFAULT_WORK_LEG_SPREAD_DEG = 30.0
 # World-space arm direction Z: T ≈ 0, A ≈ -sin(angle)
 T_POSE_Z_ABS_MAX = 0.15
 A_POSE_Z_ABS_MIN = 0.25
@@ -153,6 +155,7 @@ def apply_t_pose(armature_object_name: str = "Armature") -> dict:
     leg_r = _resolve_bone(arm, UPPER_LEG_R)
 
     bones: List[str] = [left.name, right.name]
+    arm.data.pose_position = "POSE"
     prev = _ensure_pose_mode(arm)
     try:
         _clear_bone_rotation(left)
@@ -196,6 +199,7 @@ def apply_a_pose(
     leg_r = _resolve_bone(arm, UPPER_LEG_R) if include_legs else None
 
     bones: List[str] = [left.name, right.name]
+    arm.data.pose_position = "POSE"
     prev = _ensure_pose_mode(arm)
     try:
         _set_upper_arm_a_pose(left, side="l", angle_deg=angle_deg)
