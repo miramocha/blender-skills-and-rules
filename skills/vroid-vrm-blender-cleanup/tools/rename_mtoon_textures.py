@@ -23,6 +23,11 @@ GLOBAL_STEMS = {
     "Shader_NoneNormal": "mtoon_none_normal",
     "MatcapWarp": "mtoon_matcap_warp",
     "MatcapWarp_01": "mtoon_matcap_warp_face",
+    "white_emissive": "mtoon_none_white",
+    "hair.secondary_matcap": "mtoon_none_black",
+    "light_matcap": "mtoon_matcap_highlight",
+    "mtoon_none_white": "mtoon_none_white",
+    "mtoon_matcap_highlight": "mtoon_matcap_highlight",
 }
 
 SLOT_SUFFIX = {
@@ -61,10 +66,14 @@ TEXTURES_DIR_MARKER = os.sep + "textures" + os.sep
 def material_slug(name: str) -> str:
     name = name.replace(" (Instance)", "")
     outline_match = re.match(r"MToon Outline \((.+)\)", name)
+    inner = outline_match.group(1).replace(" (Instance)", "") if outline_match else name
+    inner = re.sub(r"\.\d{3}$", "", inner)
+    if "-" in inner:
+        inner = inner.split("-", 1)[0]
+    slug = inner.lower().replace(".", "_")
     if outline_match:
-        inner = outline_match.group(1).replace(" (Instance)", "")
-        return "outline_" + inner.lower()
-    return name.lower().replace(".", "_")
+        return "outline_" + slug
+    return slug
 
 
 def is_outline_material(name: str) -> bool:

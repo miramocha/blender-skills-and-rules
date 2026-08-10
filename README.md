@@ -29,7 +29,8 @@ See the [skills README](skills/README.md) for prerequisites, pipeline diagrams, 
 
 ## Rules
 
-- [`.cursor/rules/vroid-material-names.mdc`](.cursor/rules/vroid-material-names.mdc) — VRoid import vs workflow material naming (`Face.Skin`, `Hair.Back`, …)
+- [`.cursor/rules/vroid-material-names.mdc`](.cursor/rules/vroid-material-names.mdc) — VRoid import vs workflow identity (`Face_Skin`, `Hair_Back`, …)
+- [`.cursor/rules/mtoon-material-classes.mdc`](.cursor/rules/mtoon-material-classes.mdc) — MToon class suffixes + workspace `mtoon_theme.json`
 
 ## Example results
 

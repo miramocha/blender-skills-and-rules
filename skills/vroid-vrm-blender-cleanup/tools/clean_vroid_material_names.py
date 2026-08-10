@@ -3,10 +3,11 @@ Strip VRoid material ID prefixes from bpy.data.materials names.
 
 Source names (VRoid import) stay as-is until Phase B runs, e.g.
   N00_000_00_Face_00_SKIN (Instance)
-Workflow renames use dot notation + Title Case, e.g.
-  Face.Skin
+Workflow renames use underscore identity + Title Case, e.g.
+  Face_Skin
 
-VRoid uses `_00_` as a category separator (Face_00_SKIN → Face.Skin).
+VRoid uses `_00_` as a category separator (Face_00_SKIN → Face_Skin).
+Optional MToon class tail: Face_Skin-NoRim.NoOutline
 Alias map on scene links source → workflow for downstream skills.
 """
 
@@ -14,7 +15,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import bpy
 
@@ -42,23 +43,55 @@ CLOTHING_ITEM_ALIASES: Dict[str, str] = {
     "Tops_01_CLOTH": "Hoodie",
 }
 
-# VRoid eye tail (before _00_EYE) → workflow feature for {Feature}.Eye
+# VRoid eye tail (before _00_EYE) → workflow feature for {Feature}_Eye
 EYE_FEATURE_NAMES: Dict[str, str] = {
     "EyeIris": "Iris",
     "EyeHighlight": "EyeHighlight",
     "EyeWhite": "EyeWhite",
 }
 
-# Inverted ARKit .001 names from when `.001` broke category parse (Eye.Iris vs Iris.Eye)
+# Inverted ARKit .001 names from when `.001` broke category parse (Eye.Iris vs Iris_Eye)
 WORKFLOW_REPAIR: Dict[str, str] = {
-    "Eye.Highlight": "EyeHighlight.Eye",
-    "Eye.Iris": "Iris.Eye",
-    "Eye.White": "EyeWhite.Eye",
-    "Face.Brow": "Brow.Face",
-    "Face.Eyelash": "Eyelash.Face",
-    "Face.Eyeline": "Eyeline.Face",
-    "Face.Mouth": "Mouth.Face",
+    "Eye.Highlight": "EyeHighlight_Eye",
+    "Eye.Iris": "Iris_Eye",
+    "Eye.White": "EyeWhite_Eye",
+    "Face.Brow": "Brow_Face",
+    "Face.Eyelash": "Eyelash_Face",
+    "Face.Eyeline": "Eyeline_Face",
+    "Face.Mouth": "Mouth_Face",
+    "EyeHighlight.Eye": "EyeHighlight_Eye",
+    "Iris.Eye": "Iris_Eye",
+    "EyeWhite.Eye": "EyeWhite_Eye",
+    "Brow.Face": "Brow_Face",
+    "Eyelash.Face": "Eyelash_Face",
+    "Eyeline.Face": "Eyeline_Face",
+    "Mouth.Face": "Mouth_Face",
+    "Face.Skin": "Face_Skin",
+    "Body.Skin": "Body_Skin",
+    "Hair.Back": "Hair_Back",
+    "Hair.Secondary": "Hair_Secondary",
 }
+
+KNOWN_MTOON_CLASSES = frozenset(
+    {
+        "NoRim",
+        "NoOutline",
+        "NoShade",
+        "Highlight",
+        "EmissionAccent",
+        "InvertEmissionAccent",
+    }
+)
+LEGACY_DROPPED_CLASSES = frozenset({"NoMatcap", "NoHighlight", "Glow", "InvertRim"})
+CLASS_ORDER = (
+    "NoRim",
+    "NoOutline",
+    "NoShade",
+    "Highlight",
+    "EmissionAccent",
+    "InvertEmissionAccent",
+)
+OUTLINE_PREFIX = "MToon Outline ("
 
 DRY_RUN = True
 
@@ -106,15 +139,113 @@ def _split_region_subpart(left: str) -> Tuple[str, str]:
     return _title_word(left), ""
 
 
+def dotted_workflow_to_underscore(identity: str) -> str:
+    """Face.Skin / Hair.01 → Face_Skin / Hair_01. Keeps trailing .001 on caller."""
+    if "." not in identity:
+        return identity
+    return identity.replace(".", "_")
+
+
+def parse_material_name(name: str) -> Dict[str, object]:
+    """Split outline wrapper, Blender dup, identity, and -Class.Class tail."""
+    outline = False
+    working = name
+    if working.startswith(OUTLINE_PREFIX) and working.endswith(")"):
+        working = working[len(OUTLINE_PREFIX) : -1]
+        outline = True
+
+    bare = strip_instance_suffix(working)
+    base, dup = split_blender_dup_suffix(bare)
+
+    classes: List[str] = []
+    unknown: List[str] = []
+    identity = base
+    invalid_class_dots = False
+    kind = "identity"
+
+    if "-" in base:
+        left, right = base.split("-", 1)
+        identity = left
+        for tok in right.split("."):
+            if not tok:
+                continue
+            if tok in LEGACY_DROPPED_CLASSES:
+                continue
+            if tok in KNOWN_MTOON_CLASSES:
+                if tok not in classes:
+                    classes.append(tok)
+            else:
+                unknown.append(tok)
+        kind = "identity_classes"
+    elif "." in base:
+        segs = [s for s in base.split(".") if s]
+        first, rest = (segs[0], segs[1:]) if segs else ("", [])
+        rest_are_classes = bool(rest) and all(
+            s in KNOWN_MTOON_CLASSES or s in LEGACY_DROPPED_CLASSES for s in rest
+        )
+        if rest_are_classes and first not in KNOWN_MTOON_CLASSES:
+            # Glow.NoRim → identity Glow + class NoRim (legacy dotted class grammar)
+            identity = first
+            for tok in rest:
+                if tok in LEGACY_DROPPED_CLASSES:
+                    continue
+                if tok in KNOWN_MTOON_CLASSES and tok not in classes:
+                    classes.append(tok)
+            kind = "identity_classes"
+        elif segs and all(
+            s in KNOWN_MTOON_CLASSES or s in LEGACY_DROPPED_CLASSES for s in segs
+        ):
+            invalid_class_dots = True
+            kind = "invalid_class_dots"
+
+    if outline:
+        kind = "outline"
+
+    return {
+        "identity": identity,
+        "classes": classes,
+        "unknown_classes": unknown,
+        "kind": kind,
+        "dup": dup,
+        "outline": outline,
+        "invalid_class_dots": invalid_class_dots,
+    }
+
+
+def rebuild_material_name(
+    identity: str,
+    classes: Optional[Sequence[str]] = None,
+    *,
+    outline: bool = False,
+    dup: str = "",
+) -> str:
+    ordered: List[str] = []
+    wanted = list(classes or [])
+    for token in CLASS_ORDER:
+        if token in wanted and token not in ordered:
+            ordered.append(token)
+    for token in wanted:
+        if token in KNOWN_MTOON_CLASSES and token not in ordered:
+            ordered.append(token)
+    core = f"{identity}-{'.'.join(ordered)}{dup}" if ordered else f"{identity}{dup}"
+    return f"{OUTLINE_PREFIX}{core})" if outline else core
+
+
+def identity_slug(name: str) -> str:
+    """Texture slug from identity only: Face_Skin-NoRim → face_skin."""
+    parsed = parse_material_name(name)
+    identity = dotted_workflow_to_underscore(str(parsed["identity"]))
+    return identity.lower()
+
+
 def standardize_workflow_tail(tail: str) -> str:
-    """VRoid tail after prefix strip → workflow dot name."""
+    """VRoid tail after prefix strip → workflow underscore name."""
     if not tail:
         return tail
 
     tail, _dup = split_blender_dup_suffix(tail)
 
-    # Clothing: Shoes_01_CLOTH → Shoes.Cloth; Accessory_RabbitEar_01_CLOTH → RabbitEar.Cloth
-    # Optional Accessory_ prefix (VRoid item accessories).
+    # Clothing: Shoes_01_CLOTH → Shoes_Cloth; Accessory_RabbitEar_01_CLOTH → RabbitEar_Cloth
     cloth = re.match(
         r"^(?:Accessory_)?([A-Za-z]+)_(\d{2})_CLOTH(?:_(\d+))?$",
         tail,
@@ -124,8 +255,8 @@ def standardize_workflow_tail(tail: str) -> str:
         base_key = f"{item}_{slot}_CLOTH"
         item_name = CLOTHING_ITEM_ALIASES.get(base_key, item)
         if layer:
-            return f"{item_name}_{layer}.Cloth"
-        return f"{item_name}.Cloth"
+            return f"{item_name}_{layer}_Cloth"
+        return f"{item_name}_Cloth"
 
     # Category separator _00_ (Face_00_SKIN, FaceMouth_00_FACE, Hair_00_HAIR_01)
     if "_00_" in tail:
@@ -135,55 +266,51 @@ def standardize_workflow_tail(tail: str) -> str:
 
         strand = re.match(r"^HAIR_(\d+)$", right)
         if strand:
-            return f"Hair.{strand.group(1)}"
+            return f"Hair_{strand.group(1)}"
 
-        # Primary / non-stranded hair: Hair_00_HAIR → Hair.Back
+        # Primary / non-stranded hair: Hair_00_HAIR → Hair_Back
         if left == "Hair" and right == "HAIR":
-            return "Hair.Back"
+            return "Hair_Back"
 
         region, sub = _split_region_subpart(left)
 
-        # FACE category: FaceMouth_00_FACE → Mouth.Face (feature.category)
+        # FACE category: FaceMouth_00_FACE → Mouth_Face
         if right == "FACE" and sub:
-            return f"{sub}.{category}"
+            return f"{sub}_{category}"
 
-        # EYE category: EyeIris_00_EYE → Iris.Eye; EyeHighlight_00_EYE → EyeHighlight.Eye
+        # EYE category: EyeIris_00_EYE → Iris_Eye
         if right == "EYE":
             feature = EYE_FEATURE_NAMES.get(left, sub if sub else _title_word(left))
-            return f"{feature}.{category}"
+            return f"{feature}_{category}"
 
         if sub:
-            return f"{region}.{sub}"
+            return f"{region}_{sub}"
 
-        return f"{region}.{category}"
+        return f"{region}_{category}"
 
-    return tail
+    return dotted_workflow_to_underscore(tail)
 
 
 def apply_workflow_material_name(cleaned: str) -> str:
-    if cleaned.startswith("MToon Outline ("):
-        inner = cleaned[len("MToon Outline (") : -1]
-        workflow = clean_vroid_material_name(inner)
-        return f"MToon Outline ({workflow})"
-    return standardize_workflow_tail(cleaned)
+    parsed = parse_material_name(cleaned)
+    inner = clean_vroid_material_name(str(parsed["identity"]) + str(parsed["dup"]))
+    inner_parsed = parse_material_name(inner)
+    return rebuild_material_name(
+        dotted_workflow_to_underscore(str(inner_parsed["identity"])),
+        list(parsed["classes"]),  # type: ignore[arg-type]
+        outline=bool(parsed["outline"]),
+        dup=str(inner_parsed["dup"] or parsed["dup"]),
+    )
 
 
-def clean_vroid_material_name(name: str) -> str:
-    """Full import / botched / inverted name → workflow name (keeps `.001` suffix)."""
-    if name.startswith("MToon Outline ("):
-        inner = name[len("MToon Outline (") :]
-        if inner.endswith(")"):
-            inner = inner[:-1]
-        return f"MToon Outline ({clean_vroid_material_name(inner)})"
-
-    bare = strip_instance_suffix(name)
-    base, dup = split_blender_dup_suffix(bare)
-
+def _clean_identity_core(identity: str, dup: str) -> Tuple[str, str]:
+    base = identity
     if base in WORKFLOW_REPAIR:
-        return WORKFLOW_REPAIR[base] + dup
+        cleaned = WORKFLOW_REPAIR[base]
+        return dotted_workflow_to_underscore(cleaned), dup
 
     if BROKEN_FACE_SKIN_INNER.match(base):
-        return "Face.Skin" + dup
+        return "Face_Skin", dup
 
     hair = VRoid_HAIR_MAT.match(base)
     if hair:
@@ -192,27 +319,39 @@ def clean_vroid_material_name(name: str) -> str:
         stripped = VRoid_SLOT_PREFIX.sub("", base)
 
     workflow = standardize_workflow_tail(stripped)
-    return workflow + dup
+    workflow = dotted_workflow_to_underscore(workflow)
+    return workflow, dup
+
+
+def clean_vroid_material_name(name: str) -> str:
+    """Full import / botched / inverted name → workflow name (keeps `.001` + class tail)."""
+    parsed = parse_material_name(name)
+    ident, dup = _clean_identity_core(str(parsed["identity"]), str(parsed["dup"]))
+    return rebuild_material_name(
+        ident,
+        list(parsed["classes"]),  # type: ignore[arg-type]
+        outline=bool(parsed["outline"]),
+        dup=dup,
+    )
 
 
 def needs_cleanup(name: str) -> bool:
-    if name.startswith("MToon Outline ("):
-        inner = name[len("MToon Outline (") :]
-        if inner.endswith(")"):
-            inner = inner[:-1]
-        return needs_cleanup(inner) or clean_vroid_material_name(name) != name
-
-    bare = strip_instance_suffix(name)
-    base, _dup = split_blender_dup_suffix(bare)
-    if base in WORKFLOW_REPAIR:
+    parsed = parse_material_name(name)
+    ident = str(parsed["identity"])
+    if bool(parsed.get("invalid_class_dots")):
         return True
-    if BROKEN_FACE_SKIN_INNER.match(base):
+    ident_base, _ = split_blender_dup_suffix(ident)
+    if "." in ident_base:
         return True
-    if VRoid_HAIR_MAT.match(base):
+    if ident_base in WORKFLOW_REPAIR:
         return True
-    if VRoid_SLOT_PREFIX.search(base):
+    if BROKEN_FACE_SKIN_INNER.match(ident_base):
         return True
-    if VRoid_HAIR_STRAND_PREFIX.match(base):
+    if VRoid_HAIR_MAT.match(ident_base):
+        return True
+    if VRoid_SLOT_PREFIX.search(ident_base):
+        return True
+    if VRoid_HAIR_STRAND_PREFIX.match(ident_base):
         return True
     return clean_vroid_material_name(name) != name
 
@@ -249,16 +388,20 @@ def _intermediate_stripped_name(name: str) -> str:
 
 def _clothing_variants(token: str) -> List[str]:
     variants = {token}
-    # RabbitEar.Cloth ↔ Accessory_RabbitEar_01_CLOTH / RabbitEar_01_CLOTH
-    cloth_wf = re.match(r"^([A-Za-z]+)(?:_(\d+))?\.Cloth$", token)
+    # RabbitEar_Cloth / RabbitEar.Cloth ↔ Accessory_RabbitEar_01_CLOTH
+    cloth_wf = re.match(r"^([A-Za-z]+)(?:_(\d+))?[._]Cloth$", token)
     if cloth_wf:
         item, layer = cloth_wf.group(1), cloth_wf.group(2)
         base = f"{item}_01_CLOTH"
         variants.add(base)
         variants.add(f"Accessory_{base}")
+        variants.add(f"{item}.Cloth")
+        variants.add(f"{item}_Cloth")
         if layer:
             variants.add(f"{base}_{layer}")
             variants.add(f"Accessory_{base}_{layer}")
+            variants.add(f"{item}_{layer}.Cloth")
+            variants.add(f"{item}_{layer}_Cloth")
     acc = re.match(r"^(?:Accessory_)?([A-Za-z]+)_(\d{2})_CLOTH(?:_(\d+))?$", token)
     if acc:
         item, slot, layer = acc.group(1), acc.group(2), acc.group(3)
@@ -266,27 +409,32 @@ def _clothing_variants(token: str) -> List[str]:
         friendly = CLOTHING_ITEM_ALIASES.get(base_key, item)
         if layer:
             variants.add(f"{friendly}_{layer}.Cloth")
+            variants.add(f"{friendly}_{layer}_Cloth")
         else:
             variants.add(f"{friendly}.Cloth")
+            variants.add(f"{friendly}_Cloth")
         variants.add(base_key)
         variants.add(f"Accessory_{base_key}")
 
     for vroid_base, friendly in CLOTHING_ITEM_ALIASES.items():
-        if token == f"{friendly}.Cloth":
+        if token in (f"{friendly}.Cloth", f"{friendly}_Cloth"):
             variants.add(vroid_base)
-        layered = re.match(rf"^{re.escape(friendly)}_(\d+)\.Cloth$", token)
+        layered = re.match(rf"^{re.escape(friendly)}_(\d+)[._]Cloth$", token)
         if layered:
             variants.add(f"{vroid_base}_{layered.group(1)}")
         legacy = re.match(rf"^{re.escape(friendly)}\.(\d+)$", token)
         if legacy:
             variants.add(f"{vroid_base}_{legacy.group(1)}")
             variants.add(f"{friendly}_{legacy.group(1)}.Cloth")
+            variants.add(f"{friendly}_{legacy.group(1)}_Cloth")
         if token == vroid_base:
             variants.add(f"{friendly}.Cloth")
+            variants.add(f"{friendly}_Cloth")
         elif token.startswith(vroid_base + "_"):
             layer = token[len(vroid_base) + 1 :]
             if layer.isdigit():
                 variants.add(f"{friendly}_{layer}.Cloth")
+                variants.add(f"{friendly}_{layer}_Cloth")
     return sorted(variants)
 
 
@@ -353,19 +501,36 @@ def resolve_material_by_token(
     token: str,
     scene: Optional[bpy.types.Scene] = None,
 ) -> Optional[bpy.types.Material]:
-    """Match material by workflow name, VRoid import name, or stored rename alias."""
+    """Match material by workflow name, VRoid import name, class tail, or stored alias."""
     mat = bpy.data.materials.get(token)
     if mat:
         return mat
 
+    parsed = parse_material_name(token)
+    ident = dotted_workflow_to_underscore(str(parsed["identity"]))
+    # Face_Skin → Face.Skin alias (two-part legacy). Hair_01 → Hair.01.
+    legacy_dot = ident.replace("_", ".")
+
     names = material_name_variants(token, scene)
-    if token in names:
-        names = [token] + [n for n in names if n != token]
+    names.extend(material_name_variants(ident, scene))
+    if legacy_dot != ident:
+        names.extend(material_name_variants(legacy_dot, scene))
+    names = list(dict.fromkeys([token, ident, legacy_dot] + names))
 
     for name in names:
         mat = bpy.data.materials.get(name)
         if mat:
             return mat
+
+    # Match datablocks whose parsed identity equals token identity (Face_Skin-NoRim).
+    ident_matches = [
+        m
+        for m in bpy.data.materials
+        if dotted_workflow_to_underscore(str(parse_material_name(m.name)["identity"]))
+        in {ident, legacy_dot, str(parsed["identity"])}
+    ]
+    if ident_matches:
+        return _prefer_material_match(ident, ident_matches)
 
     workflow_matches = [
         bpy.data.materials.get(name)
@@ -375,7 +540,7 @@ def resolve_material_by_token(
     if workflow_matches:
         return _prefer_material_match(token, workflow_matches)
 
-    candidates = [m for m in bpy.data.materials if token in m.name]
+    candidates = [m for m in bpy.data.materials if token in m.name or ident in m.name]
     if not candidates:
         return None
     return _prefer_material_match(token, candidates)

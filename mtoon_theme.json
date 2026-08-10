@@ -1,0 +1,29 @@
+{
+  "name": "mira-bunny",
+  "accent": [0.0168, 0.7157, 0.7991, 1.0],
+  "invertAccent": [0.7991, 0.006, 0.4072, 1.0],
+  "groups": {
+    "rim": {
+      "Parametric Rim Color": [0.0168, 0.7157, 0.7991, 1.0],
+      "Parametric Rim Fresnel Power": 100,
+      "Parametric Rim Lift": 0.25,
+      "Rim LightingMix": 0.0
+    },
+    "outline": {
+      "Outline Width Mode": 2,
+      "Outline Width": 0.001,
+      "Outline Color": [0.0392, 0.0353, 0.0745, 1.0]
+    },
+    "shading": {
+      "Shading Toony": 0.95,
+      "GI Equalization Factor": 1.0
+    },
+    "emission": {
+      "Emissive Factor": [0, 0, 0, 1]
+    },
+    "highlight": {
+      "image": "mtoon_matcap_highlight",
+      "MatCap Factor": [1, 1, 1, 1]
+    }
+  }
+}

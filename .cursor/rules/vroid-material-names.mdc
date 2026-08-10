@@ -1,5 +1,5 @@
 ---
-description: VRoid material import names, Phase B workflow dot notation, and alias lookup
+description: VRoid material import names, Phase B workflow underscore identity, and alias lookup
 alwaysApply: true
 ---
 
@@ -10,50 +10,54 @@ alwaysApply: true
 | | Example |
 |---|---------|
 | **Source** (VRoid import, until Phase B) | `N00_000_00_Face_00_SKIN (Instance)` |
-| **Workflow** (pipeline scripts) | `Face.Skin` |
+| **Workflow** (pipeline scripts) | `Face_Skin` |
 
 Phase B stores `scene["vroid_material_rename_map"]` (`source → workflow`).
+
+Class suffixes (`-NoRim.NoOutline`) are separate — see `mtoon-material-classes` rule. Identity never uses `.` (only `_`). Texture slug = `identity.lower()` → `face_skin`.
 
 ## Standardization rule
 
 1. Strip `N{xx}_{xxx}_{slot}_` import prefix and ` (Instance)`
-2. VRoid `_00_` is a **category separator** → replace with `.` + Title Case
-3. `_00_FACE` category → `{Feature}.Face` (e.g. `FaceMouth` → `Mouth.Face`). `_00_EYE` → `{Feature}.Eye` (e.g. `EyeIris_00_EYE` → `Iris.Eye`, `EyeHighlight_00_EYE` → `EyeHighlight.Eye`). Other: `Face_00_SKIN` → `Face.Skin`
-4. Clothing `_01_CLOTH` → `{Item}.Cloth`; strip optional `Accessory_` prefix (`Accessory_RabbitEar_01_CLOTH` → `RabbitEar.Cloth`); layered → `{ItemAlias}_{NN}.Cloth` (e.g. `Hoodie_01.Cloth`)
+2. VRoid `_00_` is a **category separator** → `_` + Title Case (`Face_00_SKIN` → `Face_Skin`)
+3. `_00_FACE` category → `{Feature}_Face` (e.g. `FaceMouth` → `Mouth_Face`). `_00_EYE` → `{Feature}_Eye` (e.g. `EyeIris_00_EYE` → `Iris_Eye`, `EyeHighlight_00_EYE` → `EyeHighlight_Eye`). Other: `Face_00_SKIN` → `Face_Skin`
+4. Clothing `_01_CLOTH` → `{Item}_Cloth`; strip optional `Accessory_` prefix (`Accessory_RabbitEar_01_CLOTH` → `RabbitEar_Cloth`); layered → `{ItemAlias}_{NN}_Cloth` (e.g. `Hoodie_01_Cloth`)
 
 ## Workflow name table (this project)
 
 | Source tail | Workflow |
 |-------------|----------|
-| `Face_00_SKIN` | `Face.Skin` |
-| `Body_00_SKIN` | `Body.Skin` |
-| `FaceMouth_00_FACE` | `Mouth.Face` |
-| `FaceBrow_00_FACE` | `Brow.Face` |
-| `FaceEyelash_00_FACE` | `Eyelash.Face` |
-| `FaceEyeline_00_FACE` | `Eyeline.Face` |
-| `EyeIris_00_EYE` | `Iris.Eye` |
-| `EyeHighlight_00_EYE` | `EyeHighlight.Eye` |
-| `EyeWhite_00_EYE` | `EyeWhite.Eye` |
-| `HairBack_00_HAIR` | `Hair.Back` |
-| `Hair_00_HAIR_{NN}` | `Hair.{NN}` |
-| `Hair_00_HAIR` (bare, no `{NN}`) | `Hair.01` — see caveat |
-| `Shoes_01_CLOTH` | `Shoes.Cloth` |
-| `Tops_01_CLOTH_{NN}` | `Hoodie_{NN}.Cloth` |
-| `Accessory_RabbitEar_01_CLOTH` | `RabbitEar.Cloth` |
-| `Accessory_RabbitTail_01_CLOTH` | `RabbitTail.Cloth` |
+| `Face_00_SKIN` | `Face_Skin` |
+| `Body_00_SKIN` | `Body_Skin` |
+| `FaceMouth_00_FACE` | `Mouth_Face` |
+| `FaceBrow_00_FACE` | `Brow_Face` |
+| `FaceEyelash_00_FACE` | `Eyelash_Face` |
+| `FaceEyeline_00_FACE` | `Eyeline_Face` |
+| `EyeIris_00_EYE` | `Iris_Eye` |
+| `EyeHighlight_00_EYE` | `EyeHighlight_Eye` |
+| `EyeWhite_00_EYE` | `EyeWhite_Eye` |
+| `HairBack_00_HAIR` | `Hair_Back` |
+| `Hair_00_HAIR_{NN}` | `Hair_{NN}` |
+| `Hair_00_HAIR` (bare, no `{NN}`) | `Hair_01` — see caveat |
+| `Shoes_01_CLOTH` | `Shoes_Cloth` |
+| `Tops_01_CLOTH_{NN}` | `Hoodie_{NN}_Cloth` |
+| `Accessory_RabbitEar_01_CLOTH` | `RabbitEar_Cloth` |
+| `Accessory_RabbitTail_01_CLOTH` | `RabbitTail_Cloth` |
+
+Legacy dotted names (`Face.Skin`) are aliases — resolver + Phase B migrate to underscores.
 
 ## Caveat — bare `Hair_00_HAIR`
 
 Single-material hairstyles export as `N00_000_Hair_00_HAIR (Instance)` with no `_{NN}` layer suffix. It belongs to the strand **`Hair` object**, not the `Body` back-of-head slot.
 
-`clean_vroid_material_names.py` currently maps this case to **`Hair.Back`** (rule "primary / non-stranded hair"). That name is misleading: `Hair.Back` is the [tri-to-quad-uv-map](../../skills/tri-to-quad-uv-map/SKILL.md) `hairback` profile token, whose CSV assumes the fixed **body** UV atlas — replaying it on a strand mesh would dissolve against the wrong atlas.
+`clean_vroid_material_names.py` currently maps this case to **`Hair_Back`** (rule "primary / non-stranded hair"). That name is misleading: `Hair_Back` is the [tri-to-quad-uv-map](../../skills/tri-to-quad-uv-map/SKILL.md) `hairback` profile token, whose CSV assumes the fixed **body** UV atlas — replaying it on a strand mesh would dissolve against the wrong atlas.
 
-Agent action after Phase B on a single-material hairstyle: rename `Hair.Back` → **`Hair.01`**, and patch matching values in `scene["vroid_material_rename_map"]`. Do this **before Phase C** so texture slugs come out `hair_01_base` / `hair_01_normal` rather than `hair_back_*`.
+Agent action after Phase B on a single-material hairstyle: rename `Hair_Back` → **`Hair_01`**, and patch matching values in `scene["vroid_material_rename_map"]`. Do this **before Phase C** so texture slugs come out `hair_01_base` / `hair_01_normal` rather than `hair_back_*`.
 
-Reserve `Hair.Back` for a material actually assigned to a `Body` slot.
+Reserve `Hair_Back` for a material actually assigned to a `Body` slot.
 
 ## Lookup
 
-Use `resolve_material_by_token("Face.Skin")` from `clean_vroid_material_names.py` — accepts workflow token, VRoid tail, or full import name.
+Use `resolve_material_by_token("Face_Skin")` from `clean_vroid_material_names.py` — accepts workflow token, legacy `Face.Skin`, VRoid tail, full import name, or `Face_Skin-NoRim`.
 
-Texture slugs: dots → underscores (`Face.Skin` → `face_skin`).
+Texture slugs: identity only, lowercased (`Face_Skin` → `face_skin`). Ignore `-Class` tail.

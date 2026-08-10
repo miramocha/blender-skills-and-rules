@@ -1,133 +1,101 @@
 ---
 name: mtoon-material-sync
 description: >-
-  Sync MToon 1.0 rim-light and shading (toony/shift) parametric attributes across
-  Blender materials from a reference material for a consistent VRoid/VRM look.
-  Dry-run audit then apply via Blender MCP execute_blender_code. Use when matching
-  rim lights, Shading Toony, or unifying MToon rim look across avatar mats.
+  Compile workspace mtoon_theme.json onto VRM MToon 1.0 materials using CSS-like
+  class suffixes (NoRim, NoOutline, Highlight, EmissionAccent). Also legacy
+  rim/shading sync from a reference material. Dry-run then apply via Blender MCP.
+  Use when unifying rim, outline, emission, matcap hide/highlight, invertAccent
+  expression, or applying a shared look across save-increment .blends.
 ---
 
-# MToon material sync
+# MToon material sync + theme compile
 
 ## When to use
 
-- All avatar materials should share the same **rim lighting** response
-- **Shading Toony** should match face reference across body, hair, cloth
-- **Shading Shift** stays **per-material** (face skin differs from body/hair/cloth)
-- After VRoid cleanup or manual rim tweaks on one material — propagate to the rest
+- Apply one workspace **theme** to the open `.blend` (including incrementals)
+- Stamp / compile material class names (`Face_Skin-NoRim.NoOutline`)
+- Hide vs opt-in **Highlight** matcap, `EmissionAccent`, `NoRim` lift 0 + fresnel 1000
+- Sync VRM custom expression **`invertAccent`** (was `rimPink`)
+- Legacy: copy rim/toony from one reference mat (no theme file)
 
-Requires **Blender MCP** (`execute_blender_code`) unless the user runs the script in the Scripting workspace.
+Requires **Blender MCP** (`execute_blender_code`) unless run in Scripting workspace.
 
-Related: [vroid-vrm-blender-cleanup](../vroid-vrm-blender-cleanup/SKILL.md) **Phase J** in `run_full_pipeline()` — runs after material/texture cleanup and ARKit rescans.
-
-## Before changing anything
-
-1. **Blender open** with target `.blend` loaded; MCP connected.
-2. **Pick reference material** — default token `Face.Skin` (matches any material name containing that string) unless user names another.
-3. **Dry-run → show diff table → user approval → apply → verify**.
-
-Use AskQuestion when reference material is unclear or user wants outline materials included.
+Related: [vroid-vrm-blender-cleanup](../vroid-vrm-blender-cleanup/SKILL.md) **Phase J**. Rules: `vroid-material-names`, `mtoon-material-classes`.
 
 ## Progress checklist
 
 ```
-- [ ] pick-reference — Confirm reference material (default Face skin)
-- [ ] audit-dry-run — List materials + differing MToon inputs
-- [ ] user-approve — Pause before writes
-- [ ] apply-sync — Copy parametric values to all MToon materials
-- [ ] verify — Re-audit; report remaining diffs
+- [ ] theme — workspace mtoon_theme.json (extract once if missing)
+- [ ] dummy-images — mtoon_none_white / mtoon_none_black / mtoon_matcap_highlight
+- [ ] stamp-dry-run — stamp_mtoon_classes(dry_run=True)
+- [ ] user-approve-stamp — rename datablocks
+- [ ] audit-theme — audit_mtoon_theme(theme_path=...)
+- [ ] user-approve-compile — apply_mtoon_theme(dry_run=False)
+- [ ] verify — remaining diffs + invertAccent binds
 ```
 
-## What gets synced (default)
-
-Target node: `Mtoon1Material.Mtoon1Output` on each material.
-
-| Group | Inputs |
-|-------|--------|
-| **rim** | Parametric Rim Color, Parametric Rim Fresnel Power, Parametric Rim Lift, Rim LightingMix, Rim Color Texture, Expression Rim Color Bind |
-| **shading** | Shading Toony, Shading Shift Texture Scale, Expression Shade Color Bind |
-
-**Not synced:** Shading Shift (per slot), Shade Color tint, linked shade/normal/matcap textures.
-
-**Outline materials** (`MToon Outline (...)`) are **skipped by default** — different node variant, missing some sockets.
-
-## MCP execution pattern
-
-Set `SKILL_TOOLS` to this skill’s `tools/` folder.
+## MCP pattern
 
 ```python
 import os
 
-SKILL_TOOLS = os.path.join(
-    os.path.expanduser("~"),
-    ".cursor",
-    "skills",
-    "mtoon-material-sync",
-    "tools",
-)
-# Repo: skills/mtoon-material-sync/tools
+REPO = r"D:\MiraGameDev\blender-skills-and-rules"  # workspace root
+SKILL_TOOLS = os.path.join(REPO, "skills", "mtoon-material-sync", "tools")
+THEME = os.path.join(REPO, "mtoon_theme.json")
 
+exec(open(os.path.join(SKILL_TOOLS, "compile_mtoon_theme.py"), encoding="utf-8").read())
+
+stamp = stamp_mtoon_classes(theme_path=THEME, dry_run=True)
+# after approval
+stamp = stamp_mtoon_classes(theme_path=THEME, dry_run=False)
+
+audit = audit_mtoon_theme(theme_path=THEME)
+result = apply_mtoon_theme(theme_path=THEME, dry_run=False)
+```
+
+Pass **absolute** `theme_path` — Blender cannot see Cursor root.
+
+Bootstrap JSON (first time only; then edit the file, do not re-extract from incrementals):
+
+```python
+extract_mtoon_theme(reference_material="Face_Skin", out_path=THEME)
+```
+
+## Class compile (v1)
+
+| Class | Effect |
+|-------|--------|
+| *(none)* | Rim = `accent` + theme lift; hide matcap (`mtoon_none_white` + black factor); emission black |
+| `NoRim` | Same rim color; **lift 0**; **fresnel 1000** |
+| `NoOutline` | Skip Outline Width Mode; still stamp width + color |
+| `Highlight` | `mtoon_matcap_highlight` + factor white |
+| `EmissionAccent` | Lit + shade + emissive = `accent` |
+| `InvertEmissionAccent` | Those three = `invertAccent` (error if both Emission* classes) |
+
+Expr **`invertAccent`**: rename from `rimPink`. Rebuild binds — sockets whose rest RGB ≈ accent ↔ invertAccent (rim / lit / shade / emission). Unique albedo / black emission → no bind.
+
+## Legacy reference sync
+
+Still in [sync_mtoon_attributes.py](tools/sync_mtoon_attributes.py) if no theme file:
+
+```python
 exec(open(os.path.join(SKILL_TOOLS, "sync_mtoon_attributes.py"), encoding="utf-8").read())
-
-# Audit only
-result = audit_mtoon_sync(reference_material="Face.Skin")
-
-# After approval
-result = apply_mtoon_sync(reference_material="Face.Skin", dry_run=False)
+result = apply_mtoon_sync(reference_material="Face_Skin", dry_run=False)
 ```
 
-### Options
+## Phase J
+
+`run_phase_j()` / `run_full_pipeline()`: if `mtoon_theme.json` found (repo root or `theme_path=`), compile theme; else old reference sync.
 
 ```python
-# Rim only
-result = apply_mtoon_sync(groups=["rim"], dry_run=False)
-
-# Include outline materials
-result = apply_mtoon_sync(include_outline=True, dry_run=False)
-
-# Different reference
-result = apply_mtoon_sync(reference_material="Body.Skin", dry_run=False)
+result = run_full_pipeline(dry_run=False, theme_path=THEME)
 ```
 
-### Override single value after sync
-
-```python
-# Example: bump rim lift globally without changing reference material
-result = apply_mtoon_sync(dry_run=False)
-# then MCP one-liner on all MToon outputs, or re-run with updated reference mat
-```
-
-## Full pipeline (Phase J)
-
-Included automatically when running `run_full_pipeline()` from **vroid-vrm-blender-cleanup**:
-
-```python
-result = run_full_pipeline(
-    reference_material="Face.Skin",
-    dry_run=False,
-)
-# result["phases"]["J"] — materials_needing_sync / updated_count
-```
-
-Skip with `phases={"A","B","C","F","G","H","I"}` (omit `"J"`).
-
-- `remaining_materials_needing_sync` should be `0` after apply
-- Spot-check hair/body/cloth in Material Preview
-- Outline mats may still differ if `include_outline=False`
-
-## Out of scope unless asked
-
-- MToon texture image renames (see vroid-vrm-blender-cleanup Phase B/C)
-- Shade Color tint per material
-- Linked texture graph rewiring beyond clearing links when reference uses defaults
-- MToon 0.x / non-VRM-addon shaders
-
-## Utility script
+## Utility scripts
 
 | Script | Entrypoints |
 |--------|-------------|
-| [sync_mtoon_attributes.py](tools/sync_mtoon_attributes.py) | `audit_mtoon_sync()`, `apply_mtoon_sync()`, `run_mtoon_sync()`, `run_phase_j()` |
+| [compile_mtoon_theme.py](tools/compile_mtoon_theme.py) | `audit_mtoon_theme()`, `apply_mtoon_theme()`, `stamp_mtoon_classes()`, `extract_mtoon_theme()`, `sync_invert_accent_expression()` |
+| [sync_mtoon_attributes.py](tools/sync_mtoon_attributes.py) | `audit_mtoon_sync()`, `apply_mtoon_sync()`, `run_phase_j()` |
 
-Full input tables: [reference.md](reference.md). Worked examples: [examples.md](examples.md).
-
-Return structured `result` dicts from MCP code (assign `result = ...` after exec).
+Return structured `result` dicts from MCP (`result = ...`).

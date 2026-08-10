@@ -3,8 +3,8 @@ Sync MToon 1.0 look attributes (rim + shading) across materials from a reference
 
 Run via MCP execute_blender_code or Blender Scripting workspace:
 
-    result = audit_mtoon_sync(reference_material="Face.Skin")
-    result = apply_mtoon_sync(reference_material="Face.Skin", dry_run=False)
+    result = audit_mtoon_sync(reference_material="Face_Skin")
+    result = apply_mtoon_sync(reference_material="Face_Skin", dry_run=False)
 """
 
 from __future__ import annotations
@@ -14,7 +14,10 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set,
 
 import bpy
 
-SKILL_ROOT = Path(__file__).resolve().parents[1]
+try:
+    SKILL_ROOT = Path(__file__).resolve().parents[1]
+except NameError:
+    SKILL_ROOT = Path.home() / ".cursor" / "skills" / "mtoon-material-sync"
 _phase_b_resolve_fn: Optional[Callable[..., Any]] = None
 
 
@@ -59,7 +62,7 @@ def _phase_b_resolve_material(token: str) -> Optional[bpy.types.Material]:
     return _phase_b_resolve_fn(token)
 
 MTOON_OUTPUT_NODE = "Mtoon1Material.Mtoon1Output"
-DEFAULT_REFERENCE_MATERIAL = "Face.Skin"
+DEFAULT_REFERENCE_MATERIAL = "Face_Skin"
 
 # Inputs copied for a consistent rim look (parametric values only; not texture links).
 RIM_INPUTS: Tuple[str, ...] = (
@@ -425,14 +428,37 @@ def run_mtoon_sync(
     )
 
 
+def _default_theme_path() -> Optional[str]:
+    candidates = [
+        SKILL_ROOT.parent.parent / "mtoon_theme.json",
+        Path.cwd() / "mtoon_theme.json",
+    ]
+    for path in candidates:
+        if path.is_file():
+            return str(path)
+    return None
+
+
 def run_phase_j(
     reference_material: str = DEFAULT_REFERENCE_MATERIAL,
     *,
     groups: Optional[Iterable[str]] = None,
     include_outline: bool = False,
     dry_run: bool = True,
+    theme_path: Optional[str] = None,
 ) -> dict:
-    """Pipeline Phase J — sync MToon rim + shading from reference material."""
+    """Pipeline Phase J — theme compile when mtoon_theme.json exists, else ref sync."""
+    path = theme_path or _default_theme_path()
+    if path:
+        compile_script = Path(__file__).resolve().parent / "compile_mtoon_theme.py"
+        if compile_script.is_file():
+            ns: Dict[str, Any] = {"__file__": str(compile_script)}
+            with open(compile_script, encoding="utf-8") as handle:
+                exec(compile(handle.read(), str(compile_script), "exec"), ns)
+            result = ns["run_phase_j_theme"](path, dry_run=dry_run)
+            result["fallback_sync"] = False
+            return result
+
     result = run_mtoon_sync(
         reference_material=reference_material,
         groups=groups,
@@ -441,6 +467,8 @@ def run_phase_j(
     )
     result["phase"] = "J"
     result["phase_letter"] = "J"
+    result["mode"] = "reference_sync"
+    result["fallback_sync"] = True
     return result
 
 

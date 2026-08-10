@@ -1,2 +1,5 @@
 __pycache__/
 *.py[cod]
+
+# Local one-off Blender MCP scripts (not part of skills)
+skills/_scratch/

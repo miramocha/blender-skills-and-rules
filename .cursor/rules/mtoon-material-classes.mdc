@@ -1,0 +1,38 @@
+---
+description: MToon material class suffixes, workspace mtoon_theme.json compile, hide vs Highlight matcap
+alwaysApply: true
+---
+
+# MToon material classes
+
+Grammar: `{Identity}-{Class}.{Class}` — identity uses `_` only; `.` only after `-`.
+
+Examples: `Face_Skin`, `Face_Skin-NoRim.NoOutline`, `Glow-EmissionAccent.NoOutline`, `Iris_Eye-Highlight.NoOutline.NoRim`.
+
+Invalid: `Face.Skin`, `Glow.NoRim` (migrate first). `Glow` is an identity, not a class.
+
+## Theme
+
+Edit workspace [`mtoon_theme.json`](../../mtoon_theme.json). Apply to the **open** `.blend` (incrementals share this file). MCP must pass absolute `theme_path`.
+
+Do not hand-set rim/outline/emission/matcap sockets when a theme compile will do it.
+
+## Classes
+
+| Token | Compile |
+|-------|---------|
+| `NoRim` | Rim color still `accent`; **Parametric Rim Lift = 0**; **Parametric Rim Fresnel Power = 1000** |
+| `NoOutline` | Skip Outline Width Mode (leave `0`). Still stamp Outline Width + Color |
+| `Highlight` | Opt-in matcap: `mtoon_matcap_highlight` + factor white |
+| `EmissionAccent` | Lit + Shade + Emissive = `accent` |
+| `InvertEmissionAccent` | Lit + Shade + Emissive = `invertAccent` (not both with `EmissionAccent`) |
+
+Default (no class): rim = accent + theme lift; hide matcap (`mtoon_none_white` + black factor); emission black; lit/shade untouched.
+
+## Workflow
+
+1. Stamp names (`stamp_mtoon_classes`) — dry-run then apply
+2. `audit_mtoon_theme` / `apply_mtoon_theme` from [mtoon-material-sync](../../skills/mtoon-material-sync/SKILL.md)
+3. Expr `invertAccent` (was `rimPink`) swaps accent↔invertAccent on rim/lit/shade/emission binds
+
+Dummy images: `mtoon_none_white`, `mtoon_none_black`, `mtoon_matcap_highlight` (from `Swimsuit_Front` / `light_matcap`).

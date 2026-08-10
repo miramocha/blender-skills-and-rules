@@ -191,7 +191,7 @@ Runs `bpy.ops.vrm.bones_rename` — VRM humanoid names, not the custom rules in 
 
 ### Phase B — materials
 
-VRoid **source** names (e.g. `N00_000_00_Face_00_SKIN (Instance)`) are renamed to **workflow** names (e.g. `Face.Skin`). Use workflow names in scripts; `resolve_material_by_token()` bridges source ↔ workflow via `scene["vroid_material_rename_map"]`.
+VRoid **source** names (e.g. `N00_000_00_Face_00_SKIN (Instance)`) are renamed to **workflow** names (e.g. `Face_Skin`). Use workflow names in scripts; `resolve_material_by_token()` bridges source ↔ workflow (and legacy `Face.Skin`) via `scene["vroid_material_rename_map"]`.
 
 ```python
 exec(open(os.path.join(SKILL_TOOLS, "clean_vroid_material_names.py")).read())
@@ -201,7 +201,7 @@ result = run_phase_b(dry_run=False)  # after approval
 
 Re-run Phase B once after Phase C to catch `.001` materials that still carry `N00_*`.
 
-Single-material hairstyles: Phase B maps bare `Hair_00_HAIR` → `Hair.Back`, which is the **`Body` back-of-head slot** token. On a strand `Hair` object, rename it to `Hair.01` (and patch `scene["vroid_material_rename_map"]`) **before Phase C**, so texture slugs land as `hair_01_*`. See the `vroid-material-names` rule.
+Single-material hairstyles: Phase B maps bare `Hair_00_HAIR` → `Hair_Back`, which is the **`Body` back-of-head slot** token. On a strand `Hair` object, rename it to `Hair_01` (and patch `scene["vroid_material_rename_map"]`) **before Phase C**, so texture slugs land as `hair_01_*`. See the `vroid-material-names` rule.
 
 ### Phase C — MToon textures
 
@@ -239,29 +239,28 @@ exec(open(os.path.join(SKILL_TOOLS, "reset_shape_keys.py")).read())
 result = run_phase_e(mesh_name=face_mesh_object_name, dry_run=False, phase_d_result=phase_d_result)
 ```
 
-### Phase J — MToon rim + shading sync
+### Phase J — MToon theme compile (or legacy ref sync)
 
-Runs **after** material rename, texture cleanup, and ARKit material rescans. Default reference token: `Face.Skin` (match material name containing that string).
+Runs **after** material rename, texture cleanup, and ARKit material rescans. If workspace `mtoon_theme.json` exists (or `theme_path=`), compile theme + `invertAccent` expr. Else sync rim/toony from `Face_Skin`.
 
 ```python
-MTOON_TOOLS = os.path.join(
-    os.path.expanduser("~"), ".cursor", "skills", "mtoon-material-sync", "tools"
-)
+MTOON_TOOLS = os.path.join(REPO_SKILLS, "mtoon-material-sync", "tools")
 exec(open(os.path.join(MTOON_TOOLS, "sync_mtoon_attributes.py"), encoding="utf-8").read())
-result = run_phase_j(reference_material="Face.Skin", dry_run=True)
-result = run_phase_j(reference_material="Face.Skin", dry_run=False)
+result = run_phase_j(theme_path=os.path.join(REPO, "mtoon_theme.json"), dry_run=True)
+result = run_phase_j(theme_path=os.path.join(REPO, "mtoon_theme.json"), dry_run=False)
 ```
 
 Or via orchestrator:
 
 ```python
 result = run_full_pipeline(
-    reference_material="Face.Skin",
+    reference_material="Face_Skin",
+    theme_path=os.path.join(REPO, "mtoon_theme.json"),
     dry_run=False,
 )
 ```
 
-See **mtoon-material-sync** skill for `groups=["rim"]` / `include_outline=True`.
+See **mtoon-material-sync** skill for stamp/compile and class names.
 
 ### Phase F — Fcl shape key rename
 
@@ -329,7 +328,7 @@ audit = audit_mesh_datablock_names()
 result = clean_mesh_datablock_names(dry_run=False)
 ```
 
-Strips `(merged)` and `.baked` suffixes; optionally aligns mesh data name to object name. Face skin-only mesh data (UV region extracted from the Face object) should be named **`Face.Skin`** — separate from the multi-slot `Face` object on import.
+Strips `(merged)` and `.baked` suffixes; optionally aligns mesh data name to object name. Face skin-only mesh data (UV region extracted from the Face object) should be named **`Face_Skin`** — separate from the multi-slot `Face` object on import.
 
 ## End summary — ARKit follow-up
 
@@ -345,7 +344,7 @@ Skip this follow-up if D already ran in the same session.
 
 **A:** VRM Add-on `bones_rename` — `J_Bip_*` → PascalCase humanoid bones.
 
-**B:** Strips VRoid import prefix + ` (Instance)`; standardizes to workflow dot names (`Face_00_SKIN` → `Face.Skin`). Stores alias map on scene.
+**B:** Strips VRoid import prefix + ` (Instance)`; standardizes to workflow underscore names (`Face_00_SKIN` → `Face_Skin`). Stores alias map on scene. Preserves `-Class` tails.
 
 **C:** Image datablocks, `img.filepath`, disk files under `//textures/`. Full tables: [reference.md](reference.md).
 

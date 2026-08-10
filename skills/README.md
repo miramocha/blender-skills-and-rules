@@ -91,7 +91,7 @@ flowchart TB
 | [vroid-vrm-blender-cleanup](vroid-vrm-blender-cleanup/SKILL.md) | **Main pipeline** — orchestrates phases A–K: VRM bones, workflow material names, MToon textures, ARKit transfer, shape key reset, MToon rim/shading sync, Fcl remap, bone remap, bone collections, colliders, mesh datablock names |
 | [tri-to-quad-uv-map](tri-to-quad-uv-map/SKILL.md) | UV-keyed edge dissolve from CSV maps per material slot (`Face.Skin`, `Body.Skin`, `Hair.Back`, eyes, mouth, …). Shape-key normal transfer with hidden `{Object}.old` backup |
 | [hair-tris-to-quad](hair-tris-to-quad/SKILL.md) | Strand `Hair` mesh — `tris_convert_to_quads` at 90°/90° plus `Hair.Cap` / `Hair.Strip` vertex groups |
-| [mtoon-material-sync](mtoon-material-sync/SKILL.md) | Sync MToon 1.0 rim + Shading Toony from a reference material (default `Face.Skin`). Also cleanup **Phase J** |
+| [mtoon-material-sync](mtoon-material-sync/SKILL.md) | Compile `mtoon_theme.json` + class suffixes; legacy rim sync from `Face_Skin`. Cleanup **Phase J** |
 | [vroid-shapekey-remap](vroid-shapekey-remap/SKILL.md) | `Fcl_*` → `vroid*` lower camelCase. Cleanup **Phase F** |
 | [arkit-vroid-mmd-shapekeys](arkit-vroid-mmd-shapekeys/SKILL.md) | Create Animasa MMD morph names from ARKit / VRoid sources (sources kept). Standalone after Phase D/F |
 | [blender-bone-remap](blender-bone-remap/SKILL.md) | Custom bone naming (`.l`/`.r`, hair strands). Cleanup **Phase G** + collider rename **Phase H** |
@@ -127,7 +127,7 @@ flowchart TD
 | Phase | What |
 |-------|------|
 | A | VRM humanoid bone rename (`J_Bip_*` → `Hips`, `Spine`, …) |
-| B | VRoid material names → workflow dot notation (`Face.Skin`, `Mouth.Face`, …) |
+| B | VRoid material names → workflow underscore identity (`Face_Skin`, `Mouth_Face`, …) |
 | C | MToon texture rename + write to disk |
 | D | ARKit shape keys (requires `body_type`: `male` \| `female`) |
 | E | Reset Face shape key values to 0 |
@@ -220,13 +220,13 @@ flowchart TB
 
 ## Material naming
 
-VRoid import names (`N00_000_00_Face_00_SKIN (Instance)`) are normalized to **workflow** names (`Face.Skin`) in Phase B. Pipeline scripts resolve either form via `resolve_material_by_token()` in `clean_vroid_material_names.py`.
+VRoid import names (`N00_000_00_Face_00_SKIN (Instance)`) are normalized to **workflow** names (`Face_Skin`) in Phase B. Pipeline scripts resolve `Face_Skin`, legacy `Face.Skin`, or source via `resolve_material_by_token()` in `clean_vroid_material_names.py`.
 
 ```mermaid
 flowchart LR
   src["N00_…_Face_00_SKIN (Instance)"]
   phaseB[Phase B rename]
-  workflow[Face.Skin]
+  workflow[Face_Skin]
   resolve[resolve_material_by_token]
   scripts[Pipeline + tri-to-quad scripts]
 

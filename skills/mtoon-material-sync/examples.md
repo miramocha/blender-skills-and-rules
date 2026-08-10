@@ -1,71 +1,36 @@
-# MToon material sync — examples
+# MToon theme compile — examples
 
-## Default — match all mats to face skin
+## Stamp names then compile
 
 ```python
 import os
 
-SKILL_TOOLS = os.path.join(
-    os.path.expanduser("~"), ".cursor", "skills", "mtoon-material-sync", "tools"
-)
-# Repo: skills/mtoon-material-sync/tools
-exec(open(os.path.join(SKILL_TOOLS, "sync_mtoon_attributes.py"), encoding="utf-8").read())
+REPO = r"D:\MiraGameDev\blender-skills-and-rules"
+TOOLS = os.path.join(REPO, "skills", "mtoon-material-sync", "tools")
+THEME = os.path.join(REPO, "mtoon_theme.json")
+exec(open(os.path.join(TOOLS, "compile_mtoon_theme.py"), encoding="utf-8").read())
 
-result = audit_mtoon_sync()
-# Present result["rows"] — materials with diff_count > 0
+stamp = stamp_mtoon_classes(theme_path=THEME, dry_run=True)
+# result["rows"] — old → new names
 
-result = apply_mtoon_sync(dry_run=False)
+stamp = stamp_mtoon_classes(theme_path=THEME, dry_run=False)
+audit = audit_mtoon_theme(theme_path=THEME)
+result = apply_mtoon_theme(theme_path=THEME, dry_run=False)
 ```
 
-Expected: body/hair/cloth **rim + Shading Toony** align with material containing `Face.Skin`; **Shading Shift** unchanged per slot.
+Expected: `Face.Skin` → `Face_Skin`; eyes get `-NoOutline.NoRim`; `Glow` → `Glow-NoOutline.EmissionAccent`; Highlight mats use `mtoon_matcap_highlight`; expr renamed `invertAccent`.
 
-## Rim only
+## Edit theme, re-apply to another incremental
+
+1. Change `accent` / `invertAccent` / outline width in `mtoon_theme.json`.
+2. Open `_036.blend`.
+3. `apply_mtoon_theme(theme_path=THEME, dry_run=False)` — no re-extract.
+
+## Phase J with theme
 
 ```python
-result = apply_mtoon_sync(groups=["rim"], dry_run=False)
+result = run_full_pipeline(dry_run=False, theme_path=THEME)
+# result["phases"]["J"]["mode"] == "theme"
 ```
 
-Use when shade shift/toony should stay per slot (e.g. hair keeps softer toony). Shading Shift is never in default groups.
-
-## Bump rim lift project-wide
-
-1. Set **Parametric Rim Lift** on reference material in Blender UI (e.g. `0.25`).
-2. Re-run sync:
-
-```python
-result = apply_mtoon_sync(dry_run=False)
-```
-
-Or MCP one-liner after manual reference edit:
-
-```python
-import bpy
-TARGET = 0.25
-for mat in bpy.data.materials:
-    node = mat.node_tree.nodes.get("Mtoon1Material.Mtoon1Output") if mat.use_nodes else None
-    if node and node.inputs.get("Parametric Rim Lift"):
-        node.inputs["Parametric Rim Lift"].default_value = TARGET
-```
-
-## Include outline materials
-
-```python
-result = apply_mtoon_sync(include_outline=True, dry_run=False)
-```
-
-Outline node may lack `Expression Rim Color Bind` — script skips missing sockets.
-
-## Sample audit row
-
-```json
-{
-  "material": "HAIR_01 (Instance)",
-  "diff_count": 2,
-  "diffs": [
-    "Shading Toony",
-    "Parametric Rim Color"
-  ]
-}
-```
-
-After apply, same material should have `diff_count: 0` on re-audit.
+Without `mtoon_theme.json`, Phase J falls back to `apply_mtoon_sync(reference_material="Face_Skin")`.

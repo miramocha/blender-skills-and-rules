@@ -117,6 +117,18 @@ def _load_tools() -> None:
             _exec_script(mtoon_script),
             {"audit_mtoon_sync", "apply_mtoon_sync", "run_phase_j"},
         )
+    mtoon_compile = os.path.join(paths["mtoon"], "compile_mtoon_theme.py")
+    if os.path.isfile(mtoon_compile) and "apply_mtoon_theme" not in _NS:
+        _merge_exports(
+            _exec_script(mtoon_compile),
+            {
+                "audit_mtoon_theme",
+                "apply_mtoon_theme",
+                "stamp_mtoon_classes",
+                "extract_mtoon_theme",
+                "run_phase_j_theme",
+            },
+        )
 
     bc_script = os.path.join(paths["bone_collections"], "assign_bone_collections.py")
     if os.path.isfile(bc_script) and "run_phase_k" not in _NS:
@@ -257,8 +269,9 @@ def run_full_pipeline(
     import_directory: Optional[str] = None,
     import_filename: Optional[str] = None,
     skip_arkit: bool = False,
-    reference_material: str = "Face.Skin",
+    reference_material: str = "Face_Skin",
     mtoon_include_outline: bool = False,
+    theme_path: Optional[str] = None,
 ) -> dict:
     chosen = _normalize_phases(phases)
     results: Dict[str, Any] = {
@@ -446,6 +459,7 @@ def run_full_pipeline(
                 reference_material=reference_material,
                 include_outline=mtoon_include_outline,
                 dry_run=dry_run,
+                theme_path=theme_path,
             )
 
         results["phases"]["J"] = _execute_phase("J", dry_run, run_j)
