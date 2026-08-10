@@ -580,6 +580,7 @@ def run_full_pipeline(
         results["summary"] = _pipeline_summary(
             armature_object_name=armature_object_name,
             face_mesh_object_name=face_mesh_object_name,
+            theme_path=theme_path,
         )
 
     results["phase_timings_ms"] = {
@@ -602,9 +603,28 @@ def run_full_pipeline(
     return results
 
 
+def _resolve_mtoon_theme_path(theme_path: Optional[str] = None) -> Optional[str]:
+    if theme_path and os.path.isfile(theme_path):
+        return theme_path
+    candidates: list[str] = []
+    try:
+        cleanup = _cleanup_tools_dir()
+        skills_root = os.path.dirname(os.path.dirname(cleanup))
+        repo_root = os.path.dirname(skills_root)
+        candidates.append(os.path.join(repo_root, "mtoon_theme.json"))
+    except Exception:
+        pass
+    candidates.append(os.path.join(os.getcwd(), "mtoon_theme.json"))
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
 def _pipeline_summary(
     armature_object_name: str,
     face_mesh_object_name: str,
+    theme_path: Optional[str] = None,
 ) -> dict:
     face = bpy.data.objects.get(face_mesh_object_name)
     fcl_left = 0
@@ -628,7 +648,12 @@ def _pipeline_summary(
 
     mtoon_materials_needing_sync = 0
     try:
-        if "audit_mtoon_sync" in _NS:
+        resolved_theme = _resolve_mtoon_theme_path(theme_path)
+        if resolved_theme and "audit_mtoon_theme" in _NS:
+            mtoon_materials_needing_sync = _NS["audit_mtoon_theme"](resolved_theme).get(
+                "materials_needing_sync", 0
+            )
+        elif "audit_mtoon_sync" in _NS:
             mtoon_materials_needing_sync = _NS["audit_mtoon_sync"]().get(
                 "materials_needing_sync", 0
             )

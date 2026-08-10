@@ -478,8 +478,15 @@ def apply_mtoon_theme(
         return audit
 
     updated: List[dict] = []
+    errors: List[str] = list(audit.get("errors") or [])
     for mat in _iter_mtoon(only_in_use=only_in_use, include_outline=True):
-        plan = desired_socket_plan(mat, theme)
+        try:
+            plan = desired_socket_plan(mat, theme)
+        except ValueError as exc:
+            msg = str(exc)
+            if msg not in errors:
+                errors.append(msg)
+            continue
         changed = _apply_plan(mat, plan)
         if changed:
             updated.append({"material": mat.name, "changed": changed})
@@ -503,6 +510,7 @@ def apply_mtoon_theme(
         **audit,
         "phase": "mtoon-theme-apply",
         "dry_run": False,
+        "errors": errors,
         "updated_count": len(updated),
         "updated": updated,
         "expression": expr_report,
