@@ -2,9 +2,9 @@
 name: mtoon-material-sync
 description: >-
   Compile workspace mtoon_theme.json onto VRM MToon 1.0 materials using CSS-like
-  class suffixes (NoRim, NoOutline, Highlight, EmissionAccent). Also legacy
+  class suffixes (NoRim, NoOutline, Highlight, MatcapTexture, EmissionAccent). Also legacy
   rim/shading sync from a reference material. Dry-run then apply via Blender MCP.
-  Use when unifying rim, outline, emission, matcap hide/highlight, invertAccent
+  Use when unifying rim, outline, emission, matcap hide/highlight/texture, invertAccent
   expression, or applying a shared look across save-increment .blends.
 ---
 
@@ -14,7 +14,7 @@ description: >-
 
 - Apply one workspace **theme** to the open `.blend` (including incrementals)
 - Stamp / compile material class names (`Face_Skin-NoRim.NoOutline`)
-- Hide vs opt-in **Highlight** matcap, `EmissionAccent`, `NoRim` lift 0 + fresnel 1000
+- Hide vs opt-in **Highlight** / **MatcapTexture**, `EmissionAccent`, `NoRim` black rim + lift 0 + fresnel 1000
 - Sync VRM custom expression **`invertAccent`** (was `rimPink`)
 - Legacy: copy rim/toony from one reference mat (no theme file)
 
@@ -66,11 +66,13 @@ extract_mtoon_theme(reference_material="Face_Skin", out_path=THEME)
 | Class | Effect |
 |-------|--------|
 | *(none)* | Rim = `accent` + theme lift; hide matcap (`mtoon_none_white` + black factor); emission black |
-| `NoRim` | Same rim color; **lift 0**; **fresnel 1000** |
+| `NoRim` | Rim **black**; **lift 0**; **fresnel 1000** |
 | `NoOutline` | Skip Outline Width Mode; still stamp width + color |
 | `Highlight` | `mtoon_matcap_highlight` + factor white |
+| `MatcapTexture` | Keep linked MatCap Texture + factor white (error if both with `Highlight`) |
 | `EmissionAccent` | Lit + shade + emissive = `accent` |
-| `InvertEmissionAccent` | Those three = `invertAccent` (error if both Emission* classes) |
+| `InvertEmissionAccent` | Those three = `invertAccent` |
+| `EmissionTexture` | Keep emissive texture; factor white; strength `1` (only one Emission* class) |
 
 Expr **`invertAccent`**: rename from `rimPink`. Rebuild binds — sockets whose rest RGB ≈ accent ↔ invertAccent (rim / lit / shade / emission). Unique albedo / black emission → no bind.
 

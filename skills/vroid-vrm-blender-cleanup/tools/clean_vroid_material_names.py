@@ -78,18 +78,25 @@ KNOWN_MTOON_CLASSES = frozenset(
         "NoOutline",
         "NoShade",
         "Highlight",
+        "MatcapTexture",
         "EmissionAccent",
         "InvertEmissionAccent",
+        "EmissionTexture",
     }
 )
 LEGACY_DROPPED_CLASSES = frozenset({"NoMatcap", "NoHighlight", "Glow", "InvertRim"})
+CLASS_ALIASES = {
+    "CustomMatcap": "MatcapTexture",
+}
 CLASS_ORDER = (
     "NoRim",
     "NoOutline",
     "NoShade",
     "Highlight",
+    "MatcapTexture",
     "EmissionAccent",
     "InvertEmissionAccent",
+    "EmissionTexture",
 )
 OUTLINE_PREFIX = "MToon Outline ("
 
@@ -146,6 +153,24 @@ def dotted_workflow_to_underscore(identity: str) -> str:
     return identity.replace(".", "_")
 
 
+def normalize_mtoon_class(token: str) -> Optional[str]:
+    """Map known / aliased class tokens; drop legacy; None = unknown."""
+    if token in LEGACY_DROPPED_CLASSES:
+        return None
+    mapped = CLASS_ALIASES.get(token, token)
+    if mapped in KNOWN_MTOON_CLASSES:
+        return mapped
+    return None
+
+
+def _is_class_or_legacy(token: str) -> bool:
+    return (
+        token in KNOWN_MTOON_CLASSES
+        or token in LEGACY_DROPPED_CLASSES
+        or token in CLASS_ALIASES
+    )
+
+
 def parse_material_name(name: str) -> Dict[str, object]:
     """Split outline wrapper, Blender dup, identity, and -Class.Class tail."""
     outline = False
@@ -169,32 +194,27 @@ def parse_material_name(name: str) -> Dict[str, object]:
         for tok in right.split("."):
             if not tok:
                 continue
-            if tok in LEGACY_DROPPED_CLASSES:
-                continue
-            if tok in KNOWN_MTOON_CLASSES:
-                if tok not in classes:
-                    classes.append(tok)
-            else:
+            mapped = normalize_mtoon_class(tok)
+            if mapped is None:
+                if tok in LEGACY_DROPPED_CLASSES:
+                    continue
                 unknown.append(tok)
+            elif mapped not in classes:
+                classes.append(mapped)
         kind = "identity_classes"
     elif "." in base:
         segs = [s for s in base.split(".") if s]
         first, rest = (segs[0], segs[1:]) if segs else ("", [])
-        rest_are_classes = bool(rest) and all(
-            s in KNOWN_MTOON_CLASSES or s in LEGACY_DROPPED_CLASSES for s in rest
-        )
-        if rest_are_classes and first not in KNOWN_MTOON_CLASSES:
+        rest_are_classes = bool(rest) and all(_is_class_or_legacy(s) for s in rest)
+        if rest_are_classes and first not in KNOWN_MTOON_CLASSES and first not in CLASS_ALIASES:
             # Glow.NoRim → identity Glow + class NoRim (legacy dotted class grammar)
             identity = first
             for tok in rest:
-                if tok in LEGACY_DROPPED_CLASSES:
-                    continue
-                if tok in KNOWN_MTOON_CLASSES and tok not in classes:
-                    classes.append(tok)
+                mapped = normalize_mtoon_class(tok)
+                if mapped and mapped not in classes:
+                    classes.append(mapped)
             kind = "identity_classes"
-        elif segs and all(
-            s in KNOWN_MTOON_CLASSES or s in LEGACY_DROPPED_CLASSES for s in segs
-        ):
+        elif segs and all(_is_class_or_legacy(s) for s in segs):
             invalid_class_dots = True
             kind = "invalid_class_dots"
 

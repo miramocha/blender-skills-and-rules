@@ -7,7 +7,7 @@ alwaysApply: true
 
 Grammar: `{Identity}-{Class}.{Class}` — identity uses `_` only; `.` only after `-`.
 
-Examples: `Face_Skin`, `Face_Skin-NoRim.NoOutline`, `Glow-EmissionAccent.NoOutline`, `Iris_Eye-Highlight.NoOutline.NoRim`.
+Examples: `Face_Skin`, `Face_Skin-NoRim.NoOutline`, `Glow-EmissionAccent.NoOutline`, `Iris_Eye-MatcapTexture.NoOutline.NoRim`.
 
 Invalid: `Face.Skin`, `Glow.NoRim` (migrate first). `Glow` is an identity, not a class.
 
@@ -21,11 +21,13 @@ Do not hand-set rim/outline/emission/matcap sockets when a theme compile will do
 
 | Token | Compile |
 |-------|---------|
-| `NoRim` | Rim color still `accent`; **Parametric Rim Lift = 0**; **Parametric Rim Fresnel Power = 1000** |
+| `NoRim` | **Parametric Rim Color = black**; **Parametric Rim Lift = 0**; **Parametric Rim Fresnel Power = 1000** |
 | `NoOutline` | Skip Outline Width Mode (leave `0`). Still stamp Outline Width + Color |
-| `Highlight` | Opt-in matcap: `mtoon_matcap_highlight` + factor white |
+| `Highlight` | Opt-in theme matcap: `mtoon_matcap_highlight` + factor white |
+| `MatcapTexture` | Keep linked MatCap Texture; factor white (not both with `Highlight`) |
 | `EmissionAccent` | Lit + Shade + Emissive = `accent` |
 | `InvertEmissionAccent` | Lit + Shade + Emissive = `invertAccent` (not both with `EmissionAccent`) |
+| `EmissionTexture` | Keep Emissive Texture; **Emissive Factor white**; **Emissive Strength = 1** (not with other Emission* classes) |
 
 Default (no class): rim = accent + theme lift; hide matcap (`mtoon_none_white` + black factor); emission black; lit/shade untouched.
 

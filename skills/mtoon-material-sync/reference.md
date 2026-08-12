@@ -12,11 +12,13 @@
 |-----|------|
 | `accent` | Default parametric rim + `EmissionAccent` lit/shade/emission |
 | `invertAccent` | Pink pair; VRM expr `invertAccent` swap target |
-| `groups.rim` | Fresnel + lift (non-NoRim; `NoRim` → lift `0`, fresnel `1000`), lighting mix |
+| `groups.rim` | Fresnel + lift (non-NoRim; `NoRim` → rim black, lift `0`, fresnel `1000`), lighting mix |
 | `groups.outline` | Width mode `2` = screenCoordinates, width, color |
 | `groups.shading` | Toony + GI (base mats only, not outline companions) |
 | `groups.emission` | Default emissive (usually black) |
-| `groups.highlight.image` | `mtoon_matcap_highlight` |
+| `groups.highlight.image` | `mtoon_matcap_highlight` (`Highlight` class) |
+
+`MatcapTexture`: keep linked MatCap Texture + factor white. Not both with `Highlight`. Legacy alias: `CustomMatcap`.
 
 Outline Width Mode ints: `0` none, `1` worldCoordinates, `2` screenCoordinates.
 

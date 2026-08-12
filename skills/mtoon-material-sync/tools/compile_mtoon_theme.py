@@ -38,11 +38,19 @@ def _cleanup_tools_dir() -> Path:
         SKILL_ROOT.parent / "vroid-vrm-blender-cleanup" / "tools",
         Path.home() / ".cursor" / "skills" / "vroid-vrm-blender-cleanup" / "tools",
     ]
+    found: List[Path] = []
     for path in candidates:
         script = path / "clean_vroid_material_names.py"
         if script.is_file():
+            found.append(path)
+    if not found:
+        return candidates[0]
+    # Prefer class-aware naming (parse_material_name) over older skill installs.
+    for path in found:
+        text = (path / "clean_vroid_material_names.py").read_text(encoding="utf-8", errors="ignore")
+        if "def parse_material_name(" in text:
             return path
-    return candidates[0]
+    return found[0]
 
 
 def _naming():
@@ -191,6 +199,18 @@ def _matcap_image(mat: bpy.types.Material) -> Optional[bpy.types.Image]:
     return node.image
 
 
+def _managed_matcap_names(theme: Dict[str, Any]) -> set:
+    highlight = theme.get("groups", {}).get("highlight", {}).get("image", "mtoon_matcap_highlight")
+    return {NONE_WHITE, NONE_BLACK, highlight, *HIGHLIGHT_ALIASES}
+
+
+def _is_custom_matcap(mat: bpy.types.Material, theme: Dict[str, Any]) -> bool:
+    img = _matcap_image(mat)
+    if img is None:
+        return False
+    return img.name not in _managed_matcap_names(theme)
+
+
 def _set_matcap_image(mat: bpy.types.Material, image_name: str) -> Optional[str]:
     img = bpy.data.images.get(image_name)
     if img is None:
@@ -231,9 +251,16 @@ def desired_socket_plan(mat: bpy.types.Material, theme: Dict[str, Any]) -> Dict[
 
     if "EmissionAccent" in classes and "InvertEmissionAccent" in classes:
         raise ValueError(f"{mat.name}: both EmissionAccent and InvertEmissionAccent")
+    emission_classes = {"EmissionAccent", "InvertEmissionAccent", "EmissionTexture"}
+    if len(classes & emission_classes) > 1:
+        raise ValueError(
+            f"{mat.name}: only one of EmissionAccent / InvertEmissionAccent / EmissionTexture"
+        )
+    if "Highlight" in classes and "MatcapTexture" in classes:
+        raise ValueError(f"{mat.name}: both Highlight and MatcapTexture")
 
     sockets: Dict[str, Any] = {
-        "Parametric Rim Color": accent,
+        "Parametric Rim Color": [0.0, 0.0, 0.0, 1.0] if "NoRim" in classes else accent,
         "Parametric Rim Fresnel Power": 1000.0
         if "NoRim" in classes
         else rim.get("Parametric Rim Fresnel Power", 100),
@@ -241,8 +268,12 @@ def desired_socket_plan(mat: bpy.types.Material, theme: Dict[str, Any]) -> Dict[
         "Rim LightingMix": rim.get("Rim LightingMix", 0.0),
         "Outline Width": outline_g.get("Outline Width", 0.001),
         "Outline Color": outline_g.get("Outline Color", [0.0392, 0.0353, 0.0745, 1.0]),
-        "Emissive Factor": emission.get("Emissive Factor", [0, 0, 0, 1]),
     }
+    if "EmissionTexture" in classes:
+        sockets["Emissive Factor"] = [1.0, 1.0, 1.0, 1.0]
+        sockets["Emissive Strength"] = 1.0
+    else:
+        sockets["Emissive Factor"] = emission.get("Emissive Factor", [0, 0, 0, 1])
     if "NoOutline" not in classes and not outline:
         sockets["Outline Width Mode"] = int(outline_g.get("Outline Width Mode", 2))
     if not outline:
@@ -257,9 +288,20 @@ def desired_socket_plan(mat: bpy.types.Material, theme: Dict[str, Any]) -> Dict[
         sockets["Shade Color"] = invert
         sockets["Emissive Factor"] = invert
 
-    hide = "Highlight" not in classes
-    matcap_image = NONE_WHITE if hide else highlight.get("image", "mtoon_matcap_highlight")
-    matcap_factor = [0.0, 0.0, 0.0, 1.0] if hide else highlight.get("MatCap Factor", [1, 1, 1, 1])
+    cur_matcap = _matcap_image(mat)
+    matcap_preserved = False
+    if "MatcapTexture" in classes:
+        if cur_matcap is None:
+            raise ValueError(f"{mat.name}: MatcapTexture but no MatCap Texture image")
+        matcap_image = cur_matcap.name
+        matcap_factor = [1.0, 1.0, 1.0, 1.0]
+        matcap_preserved = True
+    elif "Highlight" in classes:
+        matcap_image = highlight.get("image", "mtoon_matcap_highlight")
+        matcap_factor = highlight.get("MatCap Factor", [1, 1, 1, 1])
+    else:
+        matcap_image = NONE_WHITE
+        matcap_factor = [0.0, 0.0, 0.0, 1.0]
     sockets["MatCap Factor"] = matcap_factor
 
     skipped = []
@@ -267,6 +309,8 @@ def desired_socket_plan(mat: bpy.types.Material, theme: Dict[str, Any]) -> Dict[
         skipped.append("Outline Width Mode")
     if outline:
         skipped.extend(["Shading Toony", "GI Equalization Factor"])
+    if "EmissionTexture" in classes:
+        skipped.append("Emissive Texture")
 
     return {
         "identity": n.dotted_workflow_to_underscore(str(parsed["identity"])),
@@ -276,6 +320,8 @@ def desired_socket_plan(mat: bpy.types.Material, theme: Dict[str, Any]) -> Dict[
         "outline": outline,
         "sockets": sockets,
         "matcap_image": matcap_image,
+        "matcap_preserved": matcap_preserved,
+        "preserve_emissive_texture": "EmissionTexture" in classes,
         "skipped": skipped,
     }
 
@@ -304,6 +350,7 @@ def _diff_mat(mat: bpy.types.Material, plan: Dict[str, Any]) -> List[str]:
             "Outline Width",
             "Shading Toony",
             "GI Equalization Factor",
+            "Emissive Strength",
         ):
             if abs(float(cur) - float(want if not hasattr(want, "__len__") else want)) > COLOR_EPS:
                 diffs.append(name)
@@ -605,8 +652,8 @@ def stamp_mtoon_classes(
 
         if ident.endswith("_Matcap"):
             ident = ident[: -len("_Matcap")]
-            if "Highlight" not in classes:
-                classes.append("Highlight")
+            if "Highlight" not in classes and "MatcapTexture" not in classes:
+                classes.append("MatcapTexture")
 
         node = _mtoon_node(mat)
         if node is None:
@@ -630,8 +677,11 @@ def stamp_mtoon_classes(
 
         img = _matcap_image(mat)
         if img is not None and img.name in HIGHLIGHT_ALIASES:
-            if "Highlight" not in classes:
+            if "Highlight" not in classes and "MatcapTexture" not in classes:
                 classes.append("Highlight")
+        elif theme is not None and _is_custom_matcap(mat, theme):
+            if "MatcapTexture" not in classes and "Highlight" not in classes:
+                classes.append("MatcapTexture")
 
         lit = node.inputs.get("Lit Color")
         shade = node.inputs.get("Shade Color")
