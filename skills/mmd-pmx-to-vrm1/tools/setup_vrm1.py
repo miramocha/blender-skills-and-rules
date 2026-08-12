@@ -343,11 +343,14 @@ def setup_vrm1_on_armature(
             },
             "planned_humanoid": planned_fallback,
             "will_enable_mtoon1": True,
+            "will_rename_materials_en": True,
+            "will_rename_bones_en": True,
             "mesh_object_names": mesh_object_names or [],
             "message": (
                 f"Would enable VRM1 on {armature_object_name!r}, "
                 f"auto+fallback humanoid, estimated T-pose, "
-                f"MMD expression binds (keys kept), meta, MToon1."
+                f"MMD expression binds (keys kept), meta, MToon1, "
+                f"JP material + bone English glosses."
             ),
         }
 
@@ -390,6 +393,17 @@ def setup_vrm1_on_armature(
     steps["mtoon1"] = enable_mtoon1_on_meshes(
         mesh_object_names=mesh_object_names,
         armature_object_name=armature_object_name,
+    )
+    rename_ns = _load_sibling("rename_mmd_materials_en.py")
+    steps["rename_materials_en"] = rename_ns["rename_mmd_materials_with_english"](
+        mesh_object_names=mesh_object_names,
+        armature_object_name=armature_object_name,
+        dry_run=False,
+    )
+    bone_rename_ns = _load_sibling("rename_mmd_bones_en.py")
+    steps["rename_bones_en"] = bone_rename_ns["rename_mmd_bones_with_english"](
+        armature_object_name,
+        dry_run=False,
     )
 
     return {

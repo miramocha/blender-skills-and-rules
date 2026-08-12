@@ -114,6 +114,37 @@ After humanoid slots are filled, skill runs `bpy.ops.vrm.make_estimated_humanoid
 
 Skill sets `material.vrm_addon_extension.mtoon1.enabled = True` on materials used by imported meshes, stamps **Lit Color** (`pbr_metallic_roughness.base_color_factor`) to **white** `(1,1,1,1)`, and sets **alpha mode** to **cutout** (`alpha_mode = "MASK"`). Enabling MToon1 alone often leaves Lit black on MMD mats even when `mmd_material.diffuse_color` is white. No theme compile — use [mtoon-material-sync](../mtoon-material-sync/SKILL.md) later if needed.
 
+### English gloss rename
+
+After MToon enable, [rename_mmd_materials_en.py](tools/rename_mmd_materials_en.py) appends a short English gloss:
+
+| From | To |
+|------|----|
+| `歯` | `歯 (teeth)` |
+| `後髪` | `後髪 (back hair)` |
+| `顔` | `顔 (face)` |
+
+- Keep original JP / mixed name; format `{name} ({gloss})`
+- Skip ASCII-only (`MT_Body`, `mmd_tools_rigid_*`)
+- Idempotent: strips prior ` (…)` then re-applies map (so gloss corrections stick)
+- Unmatched CJK names → reported in `unmatched`; extend `MMD_MATERIAL_EN_GLOSS`
+
+### English gloss rename (bones)
+
+After materials, [rename_mmd_bones_en.py](tools/rename_mmd_bones_en.py) appends a short English gloss to **bone** names (JP stem kept):
+
+| From | To |
+|------|----|
+| `腕.L` | `腕.L (arm.L)` |
+| `上半身` | `上半身 (upper body)` |
+| `頭` | `頭 (head)` |
+
+- Format `{name} ({gloss})` — never strip the JP stem
+- Blender bone name max **63 UTF-8 bytes** — gloss truncated to fit
+- Updates VRM1 humanoid `node.bone_name` to the new names
+- Bone-map matching accepts bare or glossed names
+- Extend tokens in `_MMD_BONE_EN_TOKENS`
+
 ## Caveats
 
 - Non-standard PMX bone names → auto + fallback both miss slots; assign manually in VRM Add-on UI.

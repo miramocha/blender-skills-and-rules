@@ -56,6 +56,26 @@ _ns["setup_vrm1_on_armature"]("Armature", dry_run=False, model_name="MyModel")
 audit = _ns["audit_vrm1_setup"]("Armature")
 ```
 
+## Rename JP materials with English glosses only
+
+```python
+p = os.path.join(SKILL_TOOLS, "rename_mmd_materials_en.py")
+_ns = {"__file__": p}
+exec(compile(open(p, encoding="utf-8").read(), p, "exec"), _ns)
+out = _ns["rename_mmd_materials_with_english"](all_materials=True, dry_run=False)
+# 歯 → 歯 (teeth); ASCII names skipped
+```
+
+## Rename JP bones with English glosses only
+
+```python
+p = os.path.join(SKILL_TOOLS, "rename_mmd_bones_en.py")
+_ns = {"__file__": p}
+exec(compile(open(p, encoding="utf-8").read(), p, "exec"), _ns)
+out = _ns["rename_mmd_bones_with_english"]("Armature", dry_run=False)
+# 腕.L → 腕.L (arm.L); VRM humanoid refs updated
+```
+
 ## What “ready” looks like
 
 | Check | Expect |

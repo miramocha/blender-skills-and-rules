@@ -12,6 +12,7 @@ Covers:
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 # VRM1 slot attribute on human_bones → candidate bone names (exact match)
@@ -542,12 +543,31 @@ def _bone_name_set(armature) -> Set[str]:
     return {b.name for b in armature.data.bones}
 
 
-def _match_candidate(bone_names: Set[str], candidates: Sequence[str]) -> Optional[str]:
+_EN_SUFFIX_RE = re.compile(r"\s+\([^)]*\)\s*$")
+
+
+def _strip_english_suffix(name: str) -> str:
+    return _EN_SUFFIX_RE.sub("", name).rstrip()
+
+
+def _bone_lookup(armature) -> Dict[str, str]:
+    """Map bare / glossed name → actual bone name (prefer exact)."""
+    lookup: Dict[str, str] = {}
+    for b in armature.data.bones:
+        lookup[b.name] = b.name
+        bare = _strip_english_suffix(b.name)
+        # First bare wins only if not already set to exact
+        lookup.setdefault(bare, b.name)
+    return lookup
+
+
+def _match_candidate(bone_lookup: Dict[str, str], candidates: Sequence[str]) -> Optional[str]:
     for name in candidates:
-        if name in bone_names:
-            return name
-    # Case-insensitive EN fallback
-    lower_map = {n.lower(): n for n in bone_names}
+        hit = bone_lookup.get(name)
+        if hit:
+            return hit
+    # Case-insensitive EN fallback on bare names
+    lower_map = {k.lower(): v for k, v in bone_lookup.items()}
     for name in candidates:
         hit = lower_map.get(name.lower())
         if hit:
@@ -565,7 +585,8 @@ def plan_fallback_humanoid(
     Plan slot → bone_name assignments from the static map.
     Does not write. If only_empty, skip slots that already have a bone_name.
     """
-    bone_names = _bone_name_set(armature)
+    bone_lookup = _bone_lookup(armature)
+    bone_names = set(bone_lookup.values())
     ext = getattr(armature.data, "vrm_addon_extension", None)
     human_bones = None
     if ext is not None:
@@ -592,7 +613,7 @@ def plan_fallback_humanoid(
         if only_empty and current:
             skipped_filled.append(slot)
             continue
-        match = _match_candidate(bone_names, candidates)
+        match = _match_candidate(bone_lookup, candidates)
         if match:
             planned[slot] = match
         else:

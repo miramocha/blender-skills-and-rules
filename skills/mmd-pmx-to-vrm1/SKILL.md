@@ -3,9 +3,9 @@ name: mmd-pmx-to-vrm1
 description: >-
   Imports an MMD PMX/PMD model via mmd_tools and configures the Blender armature
   as VRM 1.0–ready (humanoid bone slots, MMD expression binds, meta stub, MToon1
-  enable) without exporting a .vrm file. Use when converting PMX to VRM1 setup,
-  mmd_tools import plus VRM humanoid assignment, or preparing an MMD model for
-  later VRM export.
+  enable, JP material/bone English glosses, estimated T-pose) without exporting a
+  .vrm file. Use when converting PMX to VRM1 setup, mmd_tools import plus VRM
+  humanoid assignment, or preparing an MMD model for later VRM export.
 ---
 
 # MMD PMX → VRM1 setup
@@ -28,7 +28,7 @@ Requires **Blender MCP** (`execute_blender_code`) or Scripting workspace.
 ## Hard rules
 
 - **No** `bpy.ops.export_scene.vrm` / no write `.vrm`
-- **Keep** MMD bone names — assign VRM1 slots by name; do not rename to `J_Bip_*` / PascalCase
+- **Keep** MMD JP bone name stem — may append ` (english)` gloss; do **not** rename to `J_Bip_*` / PascalCase
 - **Keep** MMD shape keys — never rename, delete, or overwrite morph / shape-key datablocks (`まばたき`, `あ`, …). VRM1 expressions only **bind** to existing keys via `assign_vrm1_expressions_from_mmd`
 - Dry-run first; apply only after user approval
 - Prefer VRM Add-on auto-assign ops; JP/EN bone map is **fallback**
@@ -106,15 +106,19 @@ flowchart TD
   exprs[Assign VRM1 expressions from MMD]
   meta[Stub VRM1 meta]
   mtoon[Enable MToon1 on mesh materials]
+  renameMat[JP material English glosses]
+  renameBone[JP bone English glosses]
   audit[Audit required bones + binds]
-  importPmx --> enableVrm --> humanoid --> tpose --> exprs --> meta --> mtoon --> audit
+  importPmx --> enableVrm --> humanoid --> tpose --> exprs --> meta --> mtoon --> renameMat --> renameBone --> audit
 ```
 
 | Step | Tool | Action |
 |------|------|--------|
 | Import | [import_pmx.py](tools/import_pmx.py) | `bpy.ops.mmd_tools.import_model` |
-| VRM1 + humanoid + expr + meta + MToon | [setup_vrm1.py](tools/setup_vrm1.py) | Enable `spec_version="1.0"`; auto humanoid; fallback map; estimated T-pose (`make_estimated_humanoid_t_pose` + `humanoid.pose=currentPose`); `assign_vrm1_expressions_from_mmd` (**bind only**); meta; `mtoon1.enabled` + Lit Color white + alpha cutout (`MASK`); shapekey before/after guard |
-| Bone map fallback | [mmd_vrm1_bone_map.py](tools/mmd_vrm1_bone_map.py) | JP + EN (+ `.L`/`.R` / `_L`/`_R`) → VRM1 slots |
+| VRM1 + humanoid + expr + meta + MToon | [setup_vrm1.py](tools/setup_vrm1.py) | Enable `spec_version="1.0"`; auto humanoid; fallback map; estimated T-pose (`make_estimated_humanoid_t_pose` + `humanoid.pose=currentPose`); `assign_vrm1_expressions_from_mmd` (**bind only**); meta; `mtoon1.enabled` + Lit Color white + alpha cutout (`MASK`); JP material + bone English glosses; shapekey before/after guard |
+| Bone map fallback | [mmd_vrm1_bone_map.py](tools/mmd_vrm1_bone_map.py) | JP + EN (+ `.L`/`.R` / `_L`/`_R`) → VRM1 slots (matches bare or glossed names) |
+| Material EN gloss | [rename_mmd_materials_en.py](tools/rename_mmd_materials_en.py) | `歯` → `歯 (teeth)` (keep JP; append gloss; skip ASCII-only) |
+| Bone EN gloss | [rename_mmd_bones_en.py](tools/rename_mmd_bones_en.py) | `腕.L` → `腕.L (arm.L)` (keep JP; append gloss; 63-byte cap; update VRM humanoid refs) |
 | Audit | [audit_vrm1_setup.py](tools/audit_vrm1_setup.py) | Required slots, expression binds, MToon count |
 | Orchestrator | [run_pmx_to_vrm1_setup.py](tools/run_pmx_to_vrm1_setup.py) | `run_pmx_to_vrm1_setup()` |
 
@@ -125,6 +129,8 @@ flowchart TD
 | [run_pmx_to_vrm1_setup.py](tools/run_pmx_to_vrm1_setup.py) | `run_pmx_to_vrm1_setup()` |
 | [import_pmx.py](tools/import_pmx.py) | `import_pmx()`, `resolve_pmx_path()`, `find_mmd_hierarchy()` |
 | [setup_vrm1.py](tools/setup_vrm1.py) | `setup_vrm1_on_armature()` |
+| [rename_mmd_materials_en.py](tools/rename_mmd_materials_en.py) | `rename_mmd_materials_with_english()` |
+| [rename_mmd_bones_en.py](tools/rename_mmd_bones_en.py) | `rename_mmd_bones_with_english()` |
 | [mmd_vrm1_bone_map.py](tools/mmd_vrm1_bone_map.py) | `apply_fallback_humanoid()`, `plan_fallback_humanoid()` |
 | [audit_vrm1_setup.py](tools/audit_vrm1_setup.py) | `audit_vrm1_setup()` |
 
