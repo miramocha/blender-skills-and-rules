@@ -7,6 +7,7 @@ Designed to run through **Blender MCP** (`execute_blender_code`) or from Blender
 ## Prerequisites
 
 - Blender 4.x / 5.x with the **VRM Add-on** (humanoid bone rename, import)
+- **MMD Tools** (optional) — PMX/PMD import for [mmd-pmx-to-vrm1](mmd-pmx-to-vrm1/SKILL.md)
 - **Blender MCP** add-on connected to Cursor
 - **Beyond Expressions** (optional) — ARKit shape key transfer in cleanup Phase D
 - **Apply Modifiers With Shape Keys** (optional) — normal transfer on Face after tri→quad when shape keys are present
@@ -22,6 +23,7 @@ SKILL_TOOLS = os.path.join(REPO_SKILLS, "vroid-vrm-blender-cleanup", "tools")
 
 ```mermaid
 flowchart TD
+  pmx[mmd-pmx-to-vrm1<br/>PMX setup optional]
   start[Import VRM / open .blend]
   cleanup[vroid-vrm-blender-cleanup<br/>phases A–K]
   tq[tri-to-quad-uv-map<br/>Face + Body slots]
@@ -29,10 +31,13 @@ flowchart TD
   sym[uv-topology-symmetry<br/>optional UV audit]
   save[Save .blend]
 
+  pmx -.-> start
   start --> cleanup --> tq --> hair
   tq -.-> sym
   hair --> save
 ```
+
+PMX path: [mmd-pmx-to-vrm1](mmd-pmx-to-vrm1/SKILL.md) sets up VRM1 in-scene (**no export**). Do **not** feed that result into VRoid cleanup A–K unless the model actually matches VRoid assumptions.
 
 Destructive steps use **dry-run first**, then apply after approval.
 
@@ -72,6 +77,10 @@ flowchart TB
     MMD[arkit-vroid-mmd-shapekeys]
   end
 
+  subgraph ingress [MMD ingress]
+    PMX[mmd-pmx-to-vrm1]
+  end
+
   J --> MTOON
   F --> SHAPE
   G --> BONE
@@ -88,6 +97,7 @@ flowchart TB
 
 | Skill | Role |
 |-------|------|
+| [mmd-pmx-to-vrm1](mmd-pmx-to-vrm1/SKILL.md) | Import PMX/PMD via mmd_tools; enable VRM1 humanoid + MMD expressions + MToon1 (**no `.vrm` export**) |
 | [vroid-vrm-blender-cleanup](vroid-vrm-blender-cleanup/SKILL.md) | **Main pipeline** — orchestrates phases A–K: VRM bones, workflow material names, MToon textures, ARKit transfer, shape key reset, MToon rim/shading sync, Fcl remap, bone remap, bone collections, colliders, mesh datablock names |
 | [tri-to-quad-uv-map](tri-to-quad-uv-map/SKILL.md) | UV-keyed edge dissolve from CSV maps per material slot (`Face.Skin`, `Body.Skin`, `Hair.Back`, eyes, mouth, …). Shape-key normal transfer with hidden `{Object}.old` backup |
 | [hair-tris-to-quad](hair-tris-to-quad/SKILL.md) | Strand `Hair` mesh — `tris_convert_to_quads` at 90°/90° plus `Hair.Cap` / `Hair.Strip` vertex groups |
