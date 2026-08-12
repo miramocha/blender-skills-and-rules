@@ -5,10 +5,15 @@
 ```python
 import os
 
-REPO = r"D:\MiraGameDev\blender-skills-and-rules"
-TOOLS = os.path.join(REPO, "skills", "mtoon-material-sync", "tools")
-THEME = os.path.join(REPO, "mtoon_theme.json")
-exec(open(os.path.join(TOOLS, "compile_mtoon_theme.py"), encoding="utf-8").read())
+SKILL_TOOLS = os.path.join(
+    os.path.expanduser("~"), ".cursor", "skills", "mtoon-material-sync", "tools"
+)
+REPO_TOOLS = os.path.join(r"...", "skills", "mtoon-material-sync", "tools")
+if os.path.isdir(REPO_TOOLS):
+    SKILL_TOOLS = REPO_TOOLS
+
+THEME = os.path.abspath("mtoon_theme.json")
+exec(open(os.path.join(SKILL_TOOLS, "compile_mtoon_theme.py"), encoding="utf-8").read())
 
 stamp = stamp_mtoon_classes(theme_path=THEME, dry_run=True)
 # result["rows"] — old → new names

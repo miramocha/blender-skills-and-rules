@@ -244,10 +244,16 @@ result = run_phase_e(mesh_name=face_mesh_object_name, dry_run=False, phase_d_res
 Runs **after** material rename, texture cleanup, and ARKit material rescans. If workspace `mtoon_theme.json` exists (or `theme_path=`), compile theme + `invertAccent` expr. Else sync rim/toony from `Face_Skin`.
 
 ```python
-MTOON_TOOLS = os.path.join(REPO_SKILLS, "mtoon-material-sync", "tools")
+MTOON_TOOLS = os.path.join(
+    os.path.expanduser("~"), ".cursor", "skills", "mtoon-material-sync", "tools"
+)
+REPO_MTOON = os.path.join(r"...", "skills", "mtoon-material-sync", "tools")
+if os.path.isdir(REPO_MTOON):
+    MTOON_TOOLS = REPO_MTOON
+THEME = os.path.abspath("mtoon_theme.json")
 exec(open(os.path.join(MTOON_TOOLS, "sync_mtoon_attributes.py"), encoding="utf-8").read())
-result = run_phase_j(theme_path=os.path.join(REPO, "mtoon_theme.json"), dry_run=True)
-result = run_phase_j(theme_path=os.path.join(REPO, "mtoon_theme.json"), dry_run=False)
+result = run_phase_j(theme_path=THEME, dry_run=True)
+result = run_phase_j(theme_path=THEME, dry_run=False)
 ```
 
 Or via orchestrator:
@@ -255,7 +261,7 @@ Or via orchestrator:
 ```python
 result = run_full_pipeline(
     reference_material="Face_Skin",
-    theme_path=os.path.join(REPO, "mtoon_theme.json"),
+    theme_path=os.path.abspath("mtoon_theme.json"),
     dry_run=False,
 )
 ```

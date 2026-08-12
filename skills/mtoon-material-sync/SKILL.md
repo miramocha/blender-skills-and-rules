@@ -39,9 +39,16 @@ Related: [vroid-vrm-blender-cleanup](../vroid-vrm-blender-cleanup/SKILL.md) **Ph
 ```python
 import os
 
-REPO = r"D:\MiraGameDev\blender-skills-and-rules"  # workspace root
-SKILL_TOOLS = os.path.join(REPO, "skills", "mtoon-material-sync", "tools")
-THEME = os.path.join(REPO, "mtoon_theme.json")
+# Prefer this repo's tools when present; else ~/.cursor/skills copy
+SKILL_TOOLS = os.path.join(
+    os.path.expanduser("~"), ".cursor", "skills", "mtoon-material-sync", "tools"
+)
+REPO_TOOLS = os.path.join(r"...", "skills", "mtoon-material-sync", "tools")
+if os.path.isdir(REPO_TOOLS):
+    SKILL_TOOLS = REPO_TOOLS
+
+# Workspace root mtoon_theme.json — pass an absolute path (Blender cannot see Cursor root)
+THEME = os.path.abspath("mtoon_theme.json")
 
 exec(open(os.path.join(SKILL_TOOLS, "compile_mtoon_theme.py"), encoding="utf-8").read())
 
@@ -53,7 +60,7 @@ audit = audit_mtoon_theme(theme_path=THEME)
 result = apply_mtoon_theme(theme_path=THEME, dry_run=False)
 ```
 
-Pass **absolute** `theme_path` — Blender cannot see Cursor root.
+Pass **absolute** `theme_path`. Replace `REPO_TOOLS` `...` with the blender-skills-and-rules workspace root when running from that repo.
 
 Bootstrap JSON (first time only; then edit the file, do not re-extract from incrementals):
 
