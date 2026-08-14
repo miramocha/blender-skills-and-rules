@@ -28,13 +28,16 @@ flowchart TD
   cleanup[vroid-vrm-blender-cleanup<br/>phases A–K]
   tq[tri-to-quad-uv-map<br/>Face + Body slots]
   hair[hair-tris-to-quad<br/>strand Hair mesh]
+  uvx[uv-texture-transfer<br/>optional UV remap bake]
   sym[uv-topology-symmetry<br/>optional UV audit]
   save[Save .blend]
 
   pmx -.-> start
   start --> cleanup --> tq --> hair
   tq -.-> sym
+  hair -.-> uvx
   hair --> save
+  uvx --> save
 ```
 
 PMX path: [mmd-pmx-to-vrm1](mmd-pmx-to-vrm1/SKILL.md) sets up VRM1 in-scene (**no export**). Do **not** feed that result into VRoid cleanup A–K unless the model actually matches VRoid assumptions.
@@ -63,6 +66,7 @@ flowchart TB
     TQ[tri-to-quad-uv-map]
     HQ[hair-tris-to-quad]
     UV[uv-topology-symmetry]
+    UXT[uv-texture-transfer]
   end
 
   subgraph libs [shared / invoked by orchestrator]
@@ -107,6 +111,7 @@ flowchart TB
 | [blender-bone-remap](blender-bone-remap/SKILL.md) | Custom bone naming (`.l`/`.r`, hair strands). Cleanup **Phase G** + collider rename **Phase H** |
 | [blender-bone-collections](blender-bone-collections/SKILL.md) | Hair / Body / Clothing bone collections. Cleanup **Phase K** |
 | [uv-topology-symmetry](uv-topology-symmetry/SKILL.md) | UV mirror audit and `TriQuad.*` vertex groups after tri→quad |
+| [uv-texture-transfer](uv-texture-transfer/SKILL.md) | Cycles bake: remap a texture/normal from one UV map to another on the same mesh |
 | [blender-skill-log](blender-skill-log/SKILL.md) | JSON-line execution log (`skill_execution.log`) and per-phase `elapsed_ms` |
 
 ### Cleanup pipeline (phases A–K)
