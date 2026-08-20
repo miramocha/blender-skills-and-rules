@@ -1,0 +1,52 @@
+{
+  "comment": "VRM 0.x MToon shader property names to VRMC_materials_mtoon / glTF core. Outline world width: VRM0 centimetres → VRM1 metres (* 0.01). giEqualizationFactor = 1 - _IndirectLightIntensity.",
+  "source": "https://github.com/vrm-c/vrm-specification/blob/master/specification/VRMC_materials_mtoon-1.0/README.md",
+  "float_to_mtoon": {
+    "_Cutoff": "gltf_alphaCutoff",
+    "_BumpScale": "gltf_normalScale",
+    "_ShadeShift": "shadingShiftFactor",
+    "_ShadeToony": "shadingToonyFactor",
+    "_RimFresnelPower": "parametricRimFresnelPowerFactor",
+    "_RimLift": "parametricRimLiftFactor",
+    "_RimLightingMix": "rimLightingMixFactor",
+    "_OutlineLightingMix": "outlineLightingMixFactor",
+    "_UvAnimScrollX": "uvAnimationScrollXSpeedFactor",
+    "_UvAnimScrollY": "uvAnimationScrollYSpeedFactor",
+    "_UvAnimRotation": "uvAnimationRotationSpeedFactor"
+  },
+  "vector_to_mtoon": {
+    "_Color": "gltf_baseColorFactor",
+    "_ShadeColor": "shadeColorFactor",
+    "_EmissionColor": "gltf_emissiveFactor",
+    "_RimColor": "parametricRimColorFactor",
+    "_OutlineColor": "outlineColorFactor"
+  },
+  "texture_to_mtoon": {
+    "_MainTex": "gltf_baseColorTexture",
+    "_ShadeTexture": "shadeMultiplyTexture",
+    "_BumpMap": "gltf_normalTexture",
+    "_EmissionMap": "gltf_emissiveTexture",
+    "_SphereAdd": "matcapTexture",
+    "_RimTexture": "rimMultiplyTexture",
+    "_OutlineWidthTexture": "outlineWidthMultiplyTexture",
+    "_UvAnimMaskTexture": "uvAnimationMaskTexture"
+  },
+  "outline_width_mode": {
+    "0": "none",
+    "1": "worldCoordinates",
+    "2": "screenCoordinates"
+  },
+  "blend_mode": {
+    "0": "opaque",
+    "1": "mask",
+    "2": "blend",
+    "3": "blend_zwrite"
+  },
+  "material_color_property": {
+    "_Color": "color",
+    "_EmissionColor": "emissionColor",
+    "_RimColor": "rimColor",
+    "_ShadeColor": "shadeColor",
+    "_OutlineColor": "outlineColor"
+  }
+}

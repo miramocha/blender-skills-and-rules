@@ -1,0 +1,24 @@
+{
+  "comment": "UniVRM MigrationVrmExpression.ToPreset — VRM 0.x presetName (and unknown+name fallback) to VRM 1.0 preset key",
+  "source": "https://github.com/vrm-c/UniVRM/blob/master/Packages/VRM10/Runtime/Migration/MigrationVrmExpression.cs",
+  "vrm0_to_vrm1": {
+    "neutral": "neutral",
+    "a": "aa",
+    "i": "ih",
+    "u": "ou",
+    "e": "ee",
+    "o": "oh",
+    "blink": "blink",
+    "blink_l": "blinkLeft",
+    "blink_r": "blinkRight",
+    "joy": "happy",
+    "angry": "angry",
+    "sorrow": "sad",
+    "fun": "relaxed",
+    "surprised": "surprised",
+    "lookup": "lookUp",
+    "lookdown": "lookDown",
+    "lookleft": "lookLeft",
+    "lookright": "lookRight"
+  }
+}
