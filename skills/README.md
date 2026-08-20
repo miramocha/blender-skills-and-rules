@@ -1,8 +1,8 @@
 # Blender skills
 
-Cursor Agent skills for VRoid/VRM avatar cleanup and topology work in Blender. Each skill is a folder with a `SKILL.md` (agent instructions), Python tools under `tools/`, and optional `profiles/` or `maps/` data.
+Cursor Agent skills for VRoid/VRM avatar cleanup and topology work in Blender, plus one **headless** VRM file converter. Each skill is a folder with a `SKILL.md` (agent instructions), Python tools under `tools/`, and optional `profiles/` or `maps/` data.
 
-Designed to run through **Blender MCP** (`execute_blender_code`) or from Blender’s Scripting workspace.
+Most skills run through **Blender MCP** (`execute_blender_code`) or from Blender’s Scripting workspace. [vrm0-vrm1-convert](vrm0-vrm1-convert/SKILL.md) is **file-level Python** (no Blender, no Unity).
 
 ## Prerequisites
 
@@ -23,6 +23,7 @@ SKILL_TOOLS = os.path.join(REPO_SKILLS, "vroid-vrm-blender-cleanup", "tools")
 
 ```mermaid
 flowchart TD
+  conv[vrm0-vrm1-convert<br/>optional disk 0x/1.0]
   pmx[mmd-pmx-to-vrm1<br/>PMX setup optional]
   start[Import VRM / open .blend]
   cleanup[vroid-vrm-blender-cleanup<br/>phases A–K]
@@ -32,6 +33,7 @@ flowchart TD
   sym[uv-topology-symmetry<br/>optional UV audit]
   save[Save .blend]
 
+  conv -.-> start
   pmx -.-> start
   start --> cleanup --> tq --> hair
   tq -.-> sym
@@ -41,6 +43,8 @@ flowchart TD
 ```
 
 PMX path: [mmd-pmx-to-vrm1](mmd-pmx-to-vrm1/SKILL.md) sets up VRM1 in-scene (**no export**). Do **not** feed that result into VRoid cleanup A–K unless the model actually matches VRoid assumptions.
+
+Disk 0.x ↔ 1.0: [vrm0-vrm1-convert](vrm0-vrm1-convert/SKILL.md) rewrites a `.vrm` GLB with stdlib Python. Do **not** auto-run A–K on the converted file unless the user is going back into Blender.
 
 Destructive steps use **dry-run first**, then apply after approval.
 
@@ -85,6 +89,10 @@ flowchart TB
     PMX[mmd-pmx-to-vrm1]
   end
 
+  subgraph files [headless files]
+    VRMCONV[vrm0-vrm1-convert]
+  end
+
   J --> MTOON
   F --> SHAPE
   G --> BONE
@@ -101,6 +109,7 @@ flowchart TB
 
 | Skill | Role |
 |-------|------|
+| [vrm0-vrm1-convert](vrm0-vrm1-convert/SKILL.md) | **No Blender.** Convert `.vrm` GLB VRM 0.x ↔ 1.0 (UniVRM maps + coord/BIN rewrite). Dry-run then write. Do not auto-feed into A–K |
 | [mmd-pmx-to-vrm1](mmd-pmx-to-vrm1/SKILL.md) | Import PMX/PMD via mmd_tools; enable VRM1 humanoid + MMD expressions + MToon1; JP material/bone English glosses (**no `.vrm` export**) |
 | [vroid-vrm-blender-cleanup](vroid-vrm-blender-cleanup/SKILL.md) | **Main pipeline** — orchestrates phases A–K: VRM bones, workflow material names, MToon textures, ARKit transfer, shape key reset, MToon rim/shading sync, Fcl remap, bone remap, bone collections, colliders, mesh datablock names |
 | [tri-to-quad-uv-map](tri-to-quad-uv-map/SKILL.md) | UV-keyed edge dissolve from CSV maps per material slot (`Face.Skin`, `Body.Skin`, `Hair.Back`, eyes, mouth, …). Shape-key normal transfer with hidden `{Object}.old` backup |

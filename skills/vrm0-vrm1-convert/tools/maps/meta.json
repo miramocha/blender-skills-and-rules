@@ -1,0 +1,38 @@
+{
+  "comment": "UniVRM MigrationVrmMeta — VRM 0.x meta strings to VRMC_vrm.meta. Commercial Allow maps to personalProfit (not corporation).",
+  "source": "https://github.com/vrm-c/UniVRM/blob/master/Packages/VRM10/Runtime/Migration/MigrationVrmMeta.cs",
+  "license_url": "https://vrm.dev/licenses/1.0/",
+  "allowed_user": {
+    "OnlyAuthor": "onlyAuthor",
+    "ExplicitlyLicensedPerson": "onlySeparatelyLicensedPerson",
+    "Everyone": "everyone"
+  },
+  "allow_disallow_to_bool": {
+    "Allow": true,
+    "Disallow": false
+  },
+  "commercial": {
+    "Allow": "personalProfit",
+    "Disallow": "personalNonProfit"
+  },
+  "vrm1_defaults": {
+    "allowPoliticalOrReligiousUsage": false,
+    "allowExcessivelySexualUsage": false,
+    "allowExcessivelyViolentUsage": false,
+    "allowRedistribution": false,
+    "avatarPermission": "onlyAuthor",
+    "commercialUsage": "personalNonProfit",
+    "creditNotation": "required",
+    "modification": "prohibited"
+  },
+  "vrm1_only_meta_keys": [
+    "allowAntisocialOrHateUsage",
+    "allowPoliticalOrReligiousUsage",
+    "allowRedistribution",
+    "creditNotation",
+    "modification",
+    "copyrightInformation",
+    "thirdPartyLicenses",
+    "licenseUrl"
+  ]
+}

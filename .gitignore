@@ -1,5 +1,8 @@
 __pycache__/
 *.py[cod]
+*.egg-info/
+build/
+dist/
 
 # Local one-off Blender MCP scripts (not part of skills)
 skills/_scratch/

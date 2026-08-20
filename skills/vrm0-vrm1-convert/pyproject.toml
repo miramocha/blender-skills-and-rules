@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vrm0-vrm1-convert"
+version = "0.1.1"
+description = "Headless VRM 0.x <-> 1.0 GLB converter (stdlib, no Blender/Unity)"
+readme = "SKILL.md"
+requires-python = ">=3.9"
+
+[project.urls]
+Homepage = "https://github.com/miramocha/blender-skills-and-rules"
+
+[project.scripts]
+convert-vrm = "vrm0_vrm1_convert.convert_vrm:main"
+
+[tool.setuptools]
+packages = ["vrm0_vrm1_convert"]
+
+[tool.setuptools.package-dir]
+vrm0_vrm1_convert = "tools"
+
+[tool.setuptools.package-data]
+vrm0_vrm1_convert = ["maps/*.json"]
