@@ -22,3 +22,24 @@ def invert_str_map(fwd: Dict[str, str]) -> Dict[str, str]:
     for k, v in fwd.items():
         inv.setdefault(v, k)
     return inv
+
+
+# UniVRM MigrationMToonMaterial: world cm→m; screen is “half height = 100%” → VRM1 height=1.
+OUTLINE_WORLD_0_TO_1 = 0.01
+OUTLINE_SCREEN_0_TO_1 = 0.01 * 0.5  # 1/200
+
+
+def outline_width_0_to_1(mode: str, width: float) -> float:
+    if mode == "worldCoordinates":
+        return width * OUTLINE_WORLD_0_TO_1
+    if mode == "screenCoordinates":
+        return width * OUTLINE_SCREEN_0_TO_1
+    return width
+
+
+def outline_width_1_to_0(mode: str, width: float) -> float:
+    if mode == "worldCoordinates":
+        return width / OUTLINE_WORLD_0_TO_1
+    if mode == "screenCoordinates":
+        return width / OUTLINE_SCREEN_0_TO_1
+    return width

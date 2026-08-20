@@ -86,7 +86,7 @@ VRM1 defaults (UniVRM): `creditNotation=required`, `modification=prohibited`, `a
 
 ## MToon
 
-See [tools/maps/mtoon.json](tools/maps/mtoon.json). World outline width: VRM0 centimetres → VRM1 metres (`× 0.01`). `giEqualizationFactor = 1 - _IndirectLightIntensity`. Unity `_MainTex` ST → `KHR_texture_transform` with V-flip. `shadingShiftTexture` has no VRM0 twin → drop on 1→0.
+See [tools/maps/mtoon.json](tools/maps/mtoon.json). World outline width: VRM0 centimetres → VRM1 metres (`× 0.01`). Screen outline width: VRM0 “half screen height = 100%” → VRM1 “screen height = 1” (`× 1/200`, UniVRM). `giEqualizationFactor = 1 - _IndirectLightIntensity`. Unity `_MainTex` ST → `KHR_texture_transform` with V-flip. `shadingShiftTexture` has no VRM0 twin → drop on 1→0.
 
 ## 1→0 dropped (typical)
 

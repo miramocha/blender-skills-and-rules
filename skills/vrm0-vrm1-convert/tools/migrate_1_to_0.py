@@ -6,10 +6,10 @@ from typing import Any, Dict, List, Optional
 
 try:
     from .coords import migrate_vector3_ext
-    from .maps_loader import invert_str_map, load_map
+    from .maps_loader import invert_str_map, load_map, outline_width_1_to_0
 except ImportError:
     from coords import migrate_vector3_ext
-    from maps_loader import invert_str_map, load_map
+    from maps_loader import invert_str_map, load_map, outline_width_1_to_0
 
 
 def _xyz_obj(vec: Any) -> Dict[str, float]:
@@ -496,11 +496,9 @@ def migrate_mtoon_1_to_0(
     mode = mtoon.get("outlineWidthMode", "none")
     floats["_OutlineWidthMode"] = float(int(inv_ow.get(mode, "0")))
     if "outlineWidthFactor" in mtoon:
-        w = float(mtoon["outlineWidthFactor"])
-        if mode == "worldCoordinates":
-            floats["_OutlineWidth"] = w * 100.0
-        else:
-            floats["_OutlineWidth"] = w
+        floats["_OutlineWidth"] = outline_width_1_to_0(
+            mode, float(mtoon["outlineWidthFactor"])
+        )
 
     alpha = mat.get("alphaMode") or "OPAQUE"
     zwrite = bool(mtoon.get("transparentWithZWrite"))
@@ -513,9 +511,12 @@ def migrate_mtoon_1_to_0(
     floats["_OutlineCullMode"] = 2.0 if cull == 1.0 else 1.0
 
     ow = int(floats.get("_OutlineWidthMode", 0))
-    # VRM1 has no outlineColorMode; UniVRM mixed-lighting is the usual export.
-    color_mode = 1 if ow else 0
+    # VRM1 has no outlineColorMode. UniVRM 0→1: Fixed → mix 0; Mixed → mix value.
+    mix = float(floats.get("_OutlineLightingMix", 1.0 if ow else 0.0))
+    color_mode = 1 if ow and mix > 0.0 else 0
     floats["_OutlineColorMode"] = float(color_mode)
+    if ow:
+        floats["_OutlineScaledMaxDistance"] = 1.0
 
     keywords: Dict[str, bool] = {}
     render_type = _apply_mtoon0_render_mode(floats, keywords, blend)

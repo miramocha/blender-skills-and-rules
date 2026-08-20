@@ -1,5 +1,5 @@
 {
-  "comment": "VRM 0.x MToon shader property names to VRMC_materials_mtoon / glTF core. Outline world width: VRM0 centimetres → VRM1 metres (* 0.01). giEqualizationFactor = 1 - _IndirectLightIntensity.",
+  "comment": "VRM 0.x MToon shader property names to VRMC_materials_mtoon / glTF core. Outline world width: VRM0 centimetres → VRM1 metres (* 0.01). Screen width: VRM0 (half-height=100%) → VRM1 (height=1) (* 1/200, UniVRM). giEqualizationFactor = 1 - _IndirectLightIntensity.",
   "source": "https://github.com/vrm-c/vrm-specification/blob/master/specification/VRMC_materials_mtoon-1.0/README.md",
   "float_to_mtoon": {
     "_Cutoff": "gltf_alphaCutoff",

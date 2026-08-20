@@ -16,6 +16,7 @@ if TOOLS not in sys.path:
 from convert_vrm import convert_vrm  # noqa: E402
 from coords import vec3_mesh  # noqa: E402
 from glb_io import read_glb, write_glb  # noqa: E402
+from maps_loader import outline_width_0_to_1, outline_width_1_to_0  # noqa: E402
 from migrate_1_to_0 import migrate_mtoon_1_to_0  # noqa: E402
 
 
@@ -323,6 +324,38 @@ class ConvertTests(unittest.TestCase):
         self.assertTrue(blend["keywordMap"]["_ALPHABLEND_ON"])
         self.assertFalse(blend["keywordMap"]["_ALPHATEST_ON"])
         self.assertEqual(blend["tagMap"]["RenderType"], "Transparent")
+
+    def test_1_to_0_screen_outline_matches_vrm0_units(self):
+        self.assertAlmostEqual(outline_width_0_to_1("screenCoordinates", 0.2), 0.001)
+        self.assertAlmostEqual(outline_width_1_to_0("screenCoordinates", 0.001), 0.2)
+        self.assertAlmostEqual(outline_width_0_to_1("worldCoordinates", 1.0), 0.01)
+        self.assertAlmostEqual(outline_width_1_to_0("worldCoordinates", 0.01), 1.0)
+
+        prop = migrate_mtoon_1_to_0(
+            {},
+            {
+                "name": "Hair",
+                "alphaMode": "OPAQUE",
+                "extensions": {
+                    "VRMC_materials_mtoon": {
+                        "specVersion": "1.0",
+                        "outlineWidthMode": "screenCoordinates",
+                        "outlineWidthFactor": 0.001,
+                        "outlineLightingMixFactor": 1.0,
+                        "outlineColorFactor": [0.2, 0.2, 0.3],
+                    }
+                },
+            },
+            [],
+        )
+        fp = prop["floatProperties"]
+        self.assertEqual(fp["_OutlineWidthMode"], 2.0)
+        self.assertAlmostEqual(fp["_OutlineWidth"], 0.2)
+        self.assertEqual(fp["_OutlineColorMode"], 1.0)
+        self.assertEqual(fp["_OutlineScaledMaxDistance"], 1.0)
+        self.assertTrue(prop["keywordMap"]["MTOON_OUTLINE_WIDTH_SCREEN"])
+        self.assertTrue(prop["keywordMap"]["MTOON_OUTLINE_COLOR_MIXED"])
+        self.assertFalse(prop["keywordMap"]["MTOON_OUTLINE_WIDTH_WORLD"])
 
 
 if __name__ == "__main__":

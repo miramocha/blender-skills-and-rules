@@ -7,10 +7,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from .coords import migrate_vector3_ext
-    from .maps_loader import load_map
+    from .maps_loader import load_map, outline_width_0_to_1
 except ImportError:
     from coords import migrate_vector3_ext
-    from maps_loader import load_map
+    from maps_loader import load_map, outline_width_0_to_1
 
 
 def _mesh_to_node(gltf: Dict[str, Any], mesh_index: int) -> int:
@@ -467,11 +467,9 @@ def migrate_mtoon_material(
     ow_mode = str(int(floats.get("_OutlineWidthMode", 0)))
     mtoon["outlineWidthMode"] = tables["outline_width_mode"].get(ow_mode, "none")
     if "_OutlineWidth" in floats:
-        w = float(floats["_OutlineWidth"])
-        if mtoon["outlineWidthMode"] == "worldCoordinates":
-            mtoon["outlineWidthFactor"] = w * 0.01
-        else:
-            mtoon["outlineWidthFactor"] = w
+        mtoon["outlineWidthFactor"] = outline_width_0_to_1(
+            mtoon["outlineWidthMode"], float(floats["_OutlineWidth"])
+        )
 
     blend = str(int(floats.get("_BlendMode", 0)))
     kind = tables["blend_mode"].get(blend, "opaque")
