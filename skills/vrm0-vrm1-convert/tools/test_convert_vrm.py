@@ -16,6 +16,7 @@ if TOOLS not in sys.path:
 from convert_vrm import convert_vrm  # noqa: E402
 from coords import vec3_mesh  # noqa: E402
 from glb_io import read_glb, write_glb  # noqa: E402
+from migrate_1_to_0 import migrate_mtoon_1_to_0  # noqa: E402
 
 
 def _vrm0_gltf(positions):
@@ -267,6 +268,61 @@ class ConvertTests(unittest.TestCase):
             out, _ = read_glb(Path(dst).read_bytes())
             self.assertNotIn("VRMC_vrm", out.get("extensions") or {})
             self.assertIn("VRM", out["extensions"])
+
+    def test_1_to_0_mask_is_cutout_not_opaque(self):
+        dropped: list = []
+        prop = migrate_mtoon_1_to_0(
+            {},
+            {
+                "name": "Hair",
+                "alphaMode": "MASK",
+                "alphaCutoff": 0.5,
+                "extensions": {"VRMC_materials_mtoon": {"specVersion": "1.0"}},
+            },
+            dropped,
+        )
+        self.assertEqual(prop["floatProperties"]["_BlendMode"], 1.0)
+        self.assertEqual(prop["floatProperties"]["_Cutoff"], 0.5)
+        self.assertEqual(prop["floatProperties"]["_SrcBlend"], 1.0)
+        self.assertEqual(prop["floatProperties"]["_DstBlend"], 0.0)
+        self.assertEqual(prop["floatProperties"]["_ZWrite"], 1.0)
+        self.assertEqual(prop["floatProperties"]["_AlphaToMask"], 1.0)
+        self.assertTrue(prop["keywordMap"]["_ALPHATEST_ON"])
+        self.assertFalse(prop["keywordMap"]["_ALPHABLEND_ON"])
+        self.assertEqual(prop["tagMap"]["RenderType"], "TransparentCutout")
+        self.assertEqual(prop["renderQueue"], 2450)
+
+        opaque = migrate_mtoon_1_to_0(
+            {},
+            {
+                "name": "Glow",
+                "alphaMode": "OPAQUE",
+                "extensions": {"VRMC_materials_mtoon": {"specVersion": "1.0"}},
+            },
+            dropped,
+        )
+        self.assertEqual(opaque["floatProperties"]["_BlendMode"], 0.0)
+        self.assertFalse(opaque["keywordMap"]["_ALPHATEST_ON"])
+        self.assertEqual(opaque["tagMap"]["RenderType"], "Opaque")
+
+        blend = migrate_mtoon_1_to_0(
+            {},
+            {
+                "name": "Lash",
+                "alphaMode": "BLEND",
+                "extensions": {
+                    "VRMC_materials_mtoon": {
+                        "specVersion": "1.0",
+                        "transparentWithZWrite": False,
+                    }
+                },
+            },
+            dropped,
+        )
+        self.assertEqual(blend["floatProperties"]["_BlendMode"], 2.0)
+        self.assertTrue(blend["keywordMap"]["_ALPHABLEND_ON"])
+        self.assertFalse(blend["keywordMap"]["_ALPHATEST_ON"])
+        self.assertEqual(blend["tagMap"]["RenderType"], "Transparent")
 
 
 if __name__ == "__main__":

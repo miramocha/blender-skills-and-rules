@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vrm0-vrm1-convert"
-version = "0.1.1"
+version = "0.1.2"
 description = "Headless VRM 0.x <-> 1.0 GLB converter (stdlib, no Blender/Unity)"
 readme = "SKILL.md"
 requires-python = ">=3.9"

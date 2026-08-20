@@ -30,6 +30,69 @@ def _rev_ext_vec(vec: Any) -> Dict[str, float]:
     return {"x": x, "y": y, "z": z}
 
 
+# UnityEngine.Rendering.BlendMode ints used by MToon Utils.SetRenderMode.
+_BLEND_ONE = 1.0
+_BLEND_SRC_ALPHA = 5.0
+_BLEND_ONE_MINUS_SRC_ALPHA = 10.0
+
+
+def _mtoon0_render_mode(alpha_mode: str, zwrite: bool) -> int:
+    """VRM0 _BlendMode: 0 opaque, 1 cutout, 2 blend, 3 blend+zwrite."""
+    if alpha_mode == "MASK":
+        return 1
+    if alpha_mode == "BLEND":
+        return 3 if zwrite else 2
+    return 0
+
+
+def _apply_mtoon0_render_mode(
+    floats: Dict[str, float], keywords: Dict[str, bool], blend: int
+) -> str:
+    """Stamp MToon hidden blend floats + shader keywords.
+
+    UniVRM/Warudo apply keywordMap as-is. Empty keywords leave the opaque
+    shader variant even when _BlendMode is 1 (cutout).
+    """
+    keywords["_ALPHATEST_ON"] = False
+    keywords["_ALPHABLEND_ON"] = False
+    keywords["_ALPHAPREMULTIPLY_ON"] = False
+    floats["_AlphaToMask"] = 0.0
+    if blend == 1:
+        floats["_SrcBlend"] = _BLEND_ONE
+        floats["_DstBlend"] = 0.0
+        floats["_ZWrite"] = 1.0
+        floats["_AlphaToMask"] = 1.0
+        keywords["_ALPHATEST_ON"] = True
+        return "TransparentCutout"
+    if blend in (2, 3):
+        floats["_SrcBlend"] = _BLEND_SRC_ALPHA
+        floats["_DstBlend"] = _BLEND_ONE_MINUS_SRC_ALPHA
+        floats["_ZWrite"] = 1.0 if blend == 3 else 0.0
+        keywords["_ALPHABLEND_ON"] = True
+        return "Transparent"
+    floats["_SrcBlend"] = _BLEND_ONE
+    floats["_DstBlend"] = 0.0
+    floats["_ZWrite"] = 1.0
+    return "Opaque"
+
+
+def _apply_mtoon0_outline_keywords(
+    keywords: Dict[str, bool], width_mode: int, color_mode: int
+) -> None:
+    keywords["MTOON_OUTLINE_WIDTH_WORLD"] = False
+    keywords["MTOON_OUTLINE_WIDTH_SCREEN"] = False
+    keywords["MTOON_OUTLINE_COLOR_FIXED"] = False
+    keywords["MTOON_OUTLINE_COLOR_MIXED"] = False
+    if width_mode == 0:
+        return
+    if width_mode == 1:
+        keywords["MTOON_OUTLINE_WIDTH_WORLD"] = True
+    elif width_mode == 2:
+        keywords["MTOON_OUTLINE_WIDTH_SCREEN"] = True
+    keywords["MTOON_OUTLINE_COLOR_FIXED"] = color_mode == 0
+    keywords["MTOON_OUTLINE_COLOR_MIXED"] = color_mode == 1
+
+
 def _node_to_mesh(gltf: Dict[str, Any], node_index: int) -> int:
     nodes = gltf.get("nodes") or []
     if 0 <= node_index < len(nodes):
@@ -441,27 +504,34 @@ def migrate_mtoon_1_to_0(
 
     alpha = mat.get("alphaMode") or "OPAQUE"
     zwrite = bool(mtoon.get("transparentWithZWrite"))
-    if alpha == "MASK":
-        floats["_BlendMode"] = 1.0
-        if "alphaCutoff" in mat:
-            floats["_Cutoff"] = float(mat["alphaCutoff"])
-    elif alpha == "BLEND" and zwrite:
-        floats["_BlendMode"] = 3.0
-    elif alpha == "BLEND":
-        floats["_BlendMode"] = 2.0
-    else:
-        floats["_BlendMode"] = 0.0
-    floats["_CullMode"] = 0.0 if mat.get("doubleSided") else 2.0
+    blend = _mtoon0_render_mode(alpha, zwrite)
+    floats["_BlendMode"] = float(blend)
+    if blend == 1:
+        floats["_Cutoff"] = float(mat["alphaCutoff"]) if "alphaCutoff" in mat else 0.5
+    cull = 0.0 if mat.get("doubleSided") else 2.0
+    floats["_CullMode"] = cull
+    floats["_OutlineCullMode"] = 2.0 if cull == 1.0 else 1.0
+
+    ow = int(floats.get("_OutlineWidthMode", 0))
+    # VRM1 has no outlineColorMode; UniVRM mixed-lighting is the usual export.
+    color_mode = 1 if ow else 0
+    floats["_OutlineColorMode"] = float(color_mode)
+
+    keywords: Dict[str, bool] = {}
+    render_type = _apply_mtoon0_render_mode(floats, keywords, blend)
+    _apply_mtoon0_outline_keywords(keywords, ow, color_mode)
+    if "_BumpMap" in texs:
+        keywords["_NORMALMAP"] = True
 
     if mtoon.get("shadingShiftTexture"):
         dropped.append(f"material {mat.get('name')!r} shadingShiftTexture")
 
     rq = 2000
-    if floats["_BlendMode"] == 3.0:
+    if blend == 3:
         rq = 2501 + int(mtoon.get("renderQueueOffsetNumber") or 0)
-    elif floats["_BlendMode"] == 2.0:
+    elif blend == 2:
         rq = 3000 + int(mtoon.get("renderQueueOffsetNumber") or 0)
-    elif floats["_BlendMode"] == 1.0:
+    elif blend == 1:
         rq = 2450
 
     return {
@@ -471,8 +541,8 @@ def migrate_mtoon_1_to_0(
         "floatProperties": floats,
         "vectorProperties": vecs,
         "textureProperties": texs,
-        "keywordMap": {},
-        "tagMap": {},
+        "keywordMap": keywords,
+        "tagMap": {"RenderType": render_type},
     }
 
 
