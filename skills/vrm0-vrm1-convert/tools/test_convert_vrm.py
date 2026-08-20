@@ -204,6 +204,9 @@ class ConvertTests(unittest.TestCase):
             bones = {h["bone"]: h["node"] for h in v0["humanoid"]["humanBones"]}
             self.assertEqual(bones["hips"], 0)
             self.assertEqual(bones["leftThumbProximal"], 1)
+            self.assertEqual(v0["firstPerson"]["firstPersonBone"], 1)
+            self.assertIn("curve", v0["firstPerson"]["lookAtHorizontalInner"])
+            self.assertEqual(v0["meta"]["licenseName"], "Redistribution_Prohibited")
             clip = v0["blendShapeMaster"]["blendShapeGroups"][0]
             self.assertEqual(clip["presetName"], "a")
             self.assertAlmostEqual(clip["binds"][0]["weight"], 100.0)

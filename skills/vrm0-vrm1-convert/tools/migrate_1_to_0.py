@@ -61,11 +61,21 @@ def migrate_meta_1_to_0(vrm1_meta: Dict[str, Any], dropped: List[str], approxima
             approximated.append("meta.authors extra entries dropped after first")
     if m.get("contactInformation"):
         meta["contactInformation"] = m["contactInformation"]
+    else:
+        meta["contactInformation"] = ""
     refs = m.get("references") or []
     if refs:
         meta["reference"] = refs[0]
         if len(refs) > 1:
             approximated.append("meta.references extra entries dropped after first")
+    else:
+        meta["reference"] = ""
+    if "author" not in meta:
+        meta["author"] = ""
+    if "title" not in meta:
+        meta["title"] = ""
+    if "version" not in meta:
+        meta["version"] = ""
     if "thumbnailImage" in m:
         # filled later with gltf in caller — store image; convert in migrate_vrm1_to_vrm0
         meta["_thumbnailImage"] = m["thumbnailImage"]
@@ -89,8 +99,12 @@ def migrate_meta_1_to_0(vrm1_meta: Dict[str, Any], dropped: List[str], approxima
 
     if m.get("otherLicenseUrl"):
         meta["otherLicenseUrl"] = m["otherLicenseUrl"]
-
-    meta["licenseName"] = "Other"
+        meta["licenseName"] = "Other"
+    else:
+        meta["otherLicenseUrl"] = ""
+        # Blender VRM0 export uses this when 1.0 modification is prohibited / unset
+        meta["licenseName"] = "Redistribution_Prohibited"
+    meta["otherPermissionUrl"] = ""
 
     for key in (
         "allowAntisocialOrHateUsage",
@@ -114,7 +128,17 @@ def migrate_humanoid_1_to_0(humanoid: Dict[str, Any]) -> Dict[str, Any]:
         v0 = inv.get(v1_name, v1_name)
         if isinstance(hb, dict) and "node" in hb:
             bones.append({"bone": v0, "node": int(hb["node"]), "useDefaultValues": True})
-    return {"humanBones": bones}
+    return {
+        "armStretch": 0.05,
+        "legStretch": 0.05,
+        "upperArmTwist": 0.5,
+        "lowerArmTwist": 0.5,
+        "upperLegTwist": 0.5,
+        "lowerLegTwist": 0.5,
+        "feetSpacing": 0.0,
+        "hasTranslationDoF": False,
+        "humanBones": bones,
+    }
 
 
 def _preset_1_to_0(v1_key: str) -> str:
@@ -184,6 +208,9 @@ def migrate_expressions_1_to_0(gltf: Dict[str, Any], expressions: Dict[str, Any]
     return {"blendShapeGroups": groups}
 
 
+_LOOKAT_CURVE = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0]
+
+
 def migrate_lookat_fp_1_to_0(
     gltf: Dict[str, Any], look_at: Dict[str, Any], first_person: Dict[str, Any], dropped: List[str]
 ) -> Dict[str, Any]:
@@ -194,6 +221,7 @@ def migrate_lookat_fp_1_to_0(
     def curve(key: str, default_y: float) -> Dict[str, Any]:
         rm = (look_at or {}).get(key) or {}
         return {
+            "curve": list(_LOOKAT_CURVE),
             "xRange": float(rm.get("inputMaxValue", 90)),
             "yRange": float(rm.get("outputScale", default_y)),
         }
@@ -205,6 +233,8 @@ def migrate_lookat_fp_1_to_0(
     fp["lookAtVerticalUp"] = curve("rangeMapVerticalUp", default_y)
     if look_at and look_at.get("offsetFromHeadBone") is not None:
         fp["firstPersonBoneOffset"] = _rev_ext_vec(look_at["offsetFromHeadBone"])
+    else:
+        fp["firstPersonBoneOffset"] = {"x": 0.0, "y": 0.0, "z": 0.0}
     fp["firstPersonBone"] = -1
 
     inv_flag = {
@@ -225,9 +255,27 @@ def migrate_lookat_fp_1_to_0(
                 "firstPersonFlag": inv_flag.get(ann.get("type") or "auto", "Auto"),
             }
         )
-    if anns:
-        fp["meshAnnotations"] = anns
+    fp["meshAnnotations"] = anns
     return fp
+
+
+def _head_node(humanoid: Dict[str, Any]) -> int:
+    for hb in humanoid.get("humanBones") or []:
+        if hb.get("bone") == "head":
+            return int(hb["node"])
+    return -1
+
+
+def _meta_texture_index(gltf: Dict[str, Any], image_index: int) -> Optional[int]:
+    images = gltf.get("images") or []
+    if image_index < 0 or image_index >= len(images):
+        return None
+    tex_i = _image_to_texture(gltf, image_index)
+    textures = gltf.setdefault("textures", [])
+    if 0 <= tex_i < len(textures) and textures[tex_i].get("source") == image_index:
+        return tex_i
+    textures.append({"source": image_index})
+    return len(textures) - 1
 
 
 def migrate_spring_1_to_0(
@@ -452,9 +500,12 @@ def migrate_vrm1_to_vrm0(gltf: Dict[str, Any]) -> Dict[str, List[str]]:
         "blendShapeMaster": migrate_expressions_1_to_0(gltf, vrm1.get("expressions") or {}),
         "materialProperties": [],
     }
+    vrm0["firstPerson"]["firstPersonBone"] = _head_node(vrm0["humanoid"])
     thumb = vrm0["meta"].pop("_thumbnailImage", None)
     if thumb is not None:
-        vrm0["meta"]["texture"] = _image_to_texture(gltf, int(thumb))
+        tex_i = _meta_texture_index(gltf, int(thumb))
+        if tex_i is not None:
+            vrm0["meta"]["texture"] = tex_i
 
     spring = ext.pop("VRMC_springBone", None)
     if spring:
