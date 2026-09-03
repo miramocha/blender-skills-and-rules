@@ -17,6 +17,7 @@ from mtoon_sidecar_schema import (  # noqa: E402
     rgba,
     wrap_document,
 )
+from export_gltf_prop import PACK_PREFIX  # noqa: E402
 
 
 class TestSchema(unittest.TestCase):
@@ -41,6 +42,9 @@ class TestSchema(unittest.TestCase):
         self.assertEqual(portable_basename(r"D:\MiraArt\bunny2026\textures\darkblue.png"), "darkblue.png")
         self.assertEqual(portable_basename("//textures/mtoon_matcap_highlight.png"), "mtoon_matcap_highlight.png")
         self.assertEqual(portable_basename("darkblue.png"), "darkblue.png")
+
+    def test_pack_prefix(self) -> None:
+        self.assertEqual(PACK_PREFIX, "MToonSidecarPack")
 
 
 if __name__ == "__main__":

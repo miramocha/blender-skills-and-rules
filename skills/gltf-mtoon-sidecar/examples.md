@@ -1,8 +1,8 @@
 # Examples
 
-## Blaster (v23-18)
+## Blaster
 
-Open `D:\MiraArt\v23-5gun\v23-18blaster_merged.blend`.
+Open `D:\MiraArt\2026blaster\2026blaster_merged.blend` (not the old `v23-18` path).
 
 Dump + export next to MiraSite models (after approval):
 
@@ -12,9 +12,9 @@ dump_mtoon_sidecar(os.path.join(out, "mtoon.json"), dry_run=False)
 export_prop_gltf(os.path.join(out, "blaster.glb"), dry_run=False)
 ```
 
-Expected material keys: `Blue-Highlight`, `Darkblue-Highlight`, `Glow-NoOutline.EmissionAccent`.
+Expected material keys: `Blue-Highlight`, `Darkblue-Highlight`, `Glow-NoOutline.EmissionAccent`. Glow/rim follow `mtoon_theme.json` **accent** (magenta), not `invertAccent`.
 
-Clips (NLA stash): `ActivateGun`, `ActivateHandle`, coupling variants. Play Gun + Handle + **one** coupling layer.
+Clips (NLA stash names): `ActivateGun`, `ActivateHandle`, `ActivateCoupling.Merged` (CW action), `ActivateCoupling.Merged.CCW`. No stale `ActivateCoupling`. After export, strip sampled extra bones so Gun / Handle / hook sets stay disjoint. Play Gun + Handle + **one** coupling layer.
 
 ## Restore after MToon enable wipe
 

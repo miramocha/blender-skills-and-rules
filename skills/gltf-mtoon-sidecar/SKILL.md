@@ -29,7 +29,9 @@ glTF export **destroys** MToon (PBR leftover). Sidecar JSON is the look. `applyM
 - Dry-run dump/export first; write after approval
 - Skip `MToon Outline (*)` datablocks in the sidecar
 - Mute NLA stash so clips stay **separate** (`export_animation_mode='NLA_TRACKS'`)
-- `export_apply=False` (keep armature / skins)
+- Clear armature pose to rest before export. `export_force_sampling=True` bakes **every bone** into every clip (identity rest on unused bones). Layered three.js actions **replace** those tracks and freeze other clips. After export, keep only bones actually keyed on that Action (see reference). Do not treat GLB channel counts as the Action.
+- Export installs temp `MToonSidecarPack.*` planes so unused MToon maps (matcap) enter the GLB, then deletes them. `applyMtoonSidecar` **removes** leftover pack meshes after harvesting textures (hidden meshes still inflate `Box3`). Do not save the .blend with those objects.
+- `export_apply=True` — mesh modifiers (subdiv, etc.). Armature not applied; skins stay. Shape keys skipped if other modifiers exist.
 - Enabling VRM MToon on a duplicate **wipes** RNA; dump JSON **before** enable, `restore_material_from_entry` after
 - MiraSite `parseVrmBytes` requires `userData.vrm` — **new loader path** for these GLBs
 
@@ -52,7 +54,7 @@ exp = export_prop_gltf(os.path.join(out_dir, "prop.glb"), dry_run=True)
 exp = export_prop_gltf(os.path.join(out_dir, "prop.glb"), dry_run=False)
 ```
 
-Copy referenced PNG **names** (`mtoon.textures.*.name`) next to the GLB if glTF omit unused MToon maps (matcap). Sidecar never stores local directories.
+Default export packs MToon Image nodes via dummy planes (`pack_mtoon_images=True`). Sidecar still stores basenames only. Sibling PNGs only if pack is off.
 
 ## Three.js
 
@@ -70,7 +72,7 @@ const mixer = new AnimationMixer(gltf.scene)
 for (const clip of gltf.animations) mixer.clipAction(clip) // play/weight as layers
 ```
 
-Same-bone clips still fight (pick one coupling variant). See [reference.md](reference.md).
+Same-bone clips still fight (pick one coupling variant). Sampled rest on unused bones also fights — strip those channels. See [reference.md](reference.md).
 
 ## Related
 
