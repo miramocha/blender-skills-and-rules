@@ -1,8 +1,8 @@
 # Blender skills
 
-Cursor Agent skills for VRoid/VRM avatar cleanup and topology work in Blender, plus one **headless** VRM file converter. Each skill is a folder with a `SKILL.md` (agent instructions), Python tools under `tools/`, and optional `profiles/` or `maps/` data.
+Cursor Agent skills for VRoid/VRM avatar cleanup and topology work in Blender, plus **headless** file tools (VRM convert, VMD merge). Each skill is a folder with a `SKILL.md` (agent instructions), Python tools under `tools/`, and optional `profiles/` or `maps/` data.
 
-Most skills run through **Blender MCP** (`execute_blender_code`) or from Blender’s Scripting workspace. [vrm0-vrm1-convert](vrm0-vrm1-convert/SKILL.md) is **file-level Python** (no Blender, no Unity).
+Most skills run through **Blender MCP** (`execute_blender_code`) or from Blender’s Scripting workspace. [vrm0-vrm1-convert](vrm0-vrm1-convert/SKILL.md) and [vmd-combine](vmd-combine/SKILL.md) are **file-level Python** (no Blender). [gltf-mtoon-sidecar](gltf-mtoon-sidecar/SKILL.md) dumps MToon JSON and exports a **non-humanoid GLB** for three-vrmxt (not a VRM avatar).
 
 ## Prerequisites
 
@@ -89,8 +89,10 @@ flowchart TB
     PMX[mmd-pmx-to-vrm1]
   end
 
-  subgraph files [headless files]
+  subgraph files [file / export]
     VRMCONV[vrm0-vrm1-convert]
+    VMDCOMB[vmd-combine]
+    GLTFMTOON[gltf-mtoon-sidecar]
   end
 
   J --> MTOON
@@ -110,6 +112,8 @@ flowchart TB
 | Skill | Role |
 |-------|------|
 | [vrm0-vrm1-convert](vrm0-vrm1-convert/SKILL.md) | **No Blender.** Convert `.vrm` GLB VRM 0.x ↔ 1.0 (UniVRM maps + coord/BIN rewrite). Dry-run then write. Do not auto-feed into A–K |
+| [vmd-combine](vmd-combine/SKILL.md) | **No Blender.** Merge `.vmd` motions (overlay/concat). Optional `--pmx` filter like MMD save. Dry-run then write |
+| [gltf-mtoon-sidecar](gltf-mtoon-sidecar/SKILL.md) | **MCP.** Non-humanoid prop **GLB + mtoon.json**; apply pixiv MToon in three-vrmxt. No dummy humanoid VRM |
 | [mmd-pmx-to-vrm1](mmd-pmx-to-vrm1/SKILL.md) | Import PMX/PMD via mmd_tools; enable VRM1 humanoid + MMD expressions + MToon1; JP material/bone English glosses (**no `.vrm` export**) |
 | [vroid-vrm-blender-cleanup](vroid-vrm-blender-cleanup/SKILL.md) | **Main pipeline** — orchestrates phases A–K: VRM bones, workflow material names, MToon textures, ARKit transfer, shape key reset, MToon rim/shading sync, Fcl remap, bone remap, bone collections, colliders, mesh datablock names |
 | [tri-to-quad-uv-map](tri-to-quad-uv-map/SKILL.md) | UV-keyed edge dissolve from CSV maps per material slot (`Face.Skin`, `Body.Skin`, `Hair.Back`, eyes, mouth, …). Shape-key normal transfer with hidden `{Object}.old` backup |
