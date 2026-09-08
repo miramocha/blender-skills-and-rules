@@ -35,6 +35,9 @@ VRMXT Blender is a **hook** on that exporter. It must not delete nodes. Do not a
         "outlineWidthFactor": 0.0015,
         "outlineColorFactor": [0.039, 0.035, 0.075],
         "outlineLightingMixFactor": 1,
+        "uvAnimationScrollXSpeedFactor": 0,
+        "uvAnimationScrollYSpeedFactor": 0,
+        "uvAnimationRotationSpeedFactor": 0,
         "textures": {
           "base": { "name": "darkblue.png" },
           "shade": { "name": "darkblue.png" },
@@ -46,13 +49,15 @@ VRMXT Blender is a **hook** on that exporter. It must not delete nodes. Do not a
 }
 ```
 
-Source of truth: `Mtoon1Material.Mtoon1Output` sockets + `Mtoon1*Texture.Image` nodes (RNA lags when `mtoon1.enabled` is false). Texture refs are **basename only** (no `D:\…`, no `//`). `blend` is the `.blend` file name only.
+Source of truth: `Mtoon1Material.Mtoon1Output` sockets + `Mtoon1*Texture.Image` nodes (RNA lags when `mtoon1.enabled` is false). UV scroll/rotation speeds are RNA-only (`vrmc_materials_mtoon.uv_animation_*_speed_factor`) — they are not sockets. Texture refs are **basename only** (no `D:\…`, no `//`). `blend` is the `.blend` file name only.
 
 `outlineWidthMode` int on the node: `0` none, `1` world, `2` screen.
 
 ## glTF export (Blender 5.x)
 
-`bpy.ops.export_scene.gltf` with `export_animation_mode='NLA_TRACKS'` (retry `'ACTIONS'`). Keep `export_animations=True`, `export_nla_strips=True`, `export_skins=True`, `export_apply=True` (modifiers except armature).
+`bpy.ops.export_scene.gltf` with `export_animation_mode='NLA_TRACKS'` (retry `'ACTIONS'`). Keep `export_animations=True`, `export_nla_strips=True`, `export_skins=True`, `export_apply=True` (modifiers except armature), **`use_visible=True`**.
+
+Khronos `use_visible` defaults **false**. Viewport-hidden objects still export and overlap replacements (hidden `frame.front.top` + live `frame.front.top.w.ridges`). `export_prop_gltf` forces visible-only. Dump sidecar with `skip_hidden=True` (default) so JSON only lists materials on `visible_get()` objects.
 
 Muted NLA stash tracks still export as named clips if mode is NLA tracks.
 

@@ -93,6 +93,7 @@ Replace `...` with the blender-skills-and-rules workspace root.
 | `assign` | `True` | Rewire VRM `*.index.source` + Image Texture nodes that used the source |
 | `switch_render_uv` | `False` | Set dest UV `active_render` (MToon empty UV Map follows this) |
 | `materials` | object slots | Limit assign list |
+| `fill` | black / flat normal | Hex (`D8BCF5`) or `(r,g,b[,a])`. Custom fill → `use_clear=False` so empty UV keeps bg |
 | `dry_run` | `True` | Audit plan only |
 
 Temp bake mat `_UVTransferBake` is always removed. Render engine / samples restored.

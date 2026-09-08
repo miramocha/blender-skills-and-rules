@@ -1,8 +1,8 @@
 # Blender skills
 
-Cursor Agent skills for VRoid/VRM avatar cleanup and topology work in Blender, plus **headless** file tools (VRM convert, VMD merge). Each skill is a folder with a `SKILL.md` (agent instructions), Python tools under `tools/`, and optional `profiles/` or `maps/` data.
+Cursor Agent skills for VRoid/VRM avatar cleanup and topology work in Blender, plus **headless** file tools (VRM convert, VMD merge, MToonXT stencil migrate). Each skill is a folder with a `SKILL.md` (agent instructions), Python tools under `tools/`, and optional `profiles/` or `maps/` data.
 
-Most skills run through **Blender MCP** (`execute_blender_code`) or from Blender’s Scripting workspace. [vrm0-vrm1-convert](vrm0-vrm1-convert/SKILL.md) and [vmd-combine](vmd-combine/SKILL.md) are **file-level Python** (no Blender). [gltf-mtoon-sidecar](gltf-mtoon-sidecar/SKILL.md) dumps MToon JSON and exports a **non-humanoid GLB** for three-vrmxt (not a VRM avatar).
+Most skills run through **Blender MCP** (`execute_blender_code`) or from Blender’s Scripting workspace. [vrm0-vrm1-convert](vrm0-vrm1-convert/SKILL.md), [vmd-combine](vmd-combine/SKILL.md), and [vrmxt-stencil-migrate](vrmxt-stencil-migrate/SKILL.md) are **file-level Python** (no Blender). [gltf-mtoon-sidecar](gltf-mtoon-sidecar/SKILL.md) dumps MToon JSON and exports a **non-humanoid GLB** for three-vrmxt (not a VRM avatar).
 
 ## Prerequisites
 
@@ -45,6 +45,8 @@ flowchart TD
 PMX path: [mmd-pmx-to-vrm1](mmd-pmx-to-vrm1/SKILL.md) sets up VRM1 in-scene (**no export**). Do **not** feed that result into VRoid cleanup A–K unless the model actually matches VRoid assumptions.
 
 Disk 0.x ↔ 1.0: [vrm0-vrm1-convert](vrm0-vrm1-convert/SKILL.md) rewrites a `.vrm` GLB with stdlib Python. Do **not** auto-run A–K on the converted file unless the user is going back into Blender.
+
+Retired MToonXT stencil JSON: [vrmxt-stencil-migrate](vrmxt-stencil-migrate/SKILL.md) rewrites `stencilRelationships` and per-material `{op}` extras to root `stencil[]`. Dry-run, then `--apply` to a new path.
 
 Destructive steps use **dry-run first**, then apply after approval.
 
@@ -92,6 +94,7 @@ flowchart TB
   subgraph files [file / export]
     VRMCONV[vrm0-vrm1-convert]
     VMDCOMB[vmd-combine]
+    STENCILMIG[vrmxt-stencil-migrate]
     GLTFMTOON[gltf-mtoon-sidecar]
   end
 
@@ -112,6 +115,7 @@ flowchart TB
 | Skill | Role |
 |-------|------|
 | [vrm0-vrm1-convert](vrm0-vrm1-convert/SKILL.md) | **No Blender.** Convert `.vrm` GLB VRM 0.x ↔ 1.0 (UniVRM maps + coord/BIN rewrite). Dry-run then write. Do not auto-feed into A–K |
+| [vrmxt-stencil-migrate](vrmxt-stencil-migrate/SKILL.md) | **No Blender.** Rewrite retired MToonXT stencil JSON (`stencilRelationships`, material `op`s) to root `stencil[]`. Dry-run then write |
 | [vmd-combine](vmd-combine/SKILL.md) | **No Blender.** Merge `.vmd` motions (overlay/concat). Optional `--pmx` filter like MMD save. Dry-run then write |
 | [gltf-mtoon-sidecar](gltf-mtoon-sidecar/SKILL.md) | **MCP.** Non-humanoid prop **GLB + mtoon.json**; apply pixiv MToon in three-vrmxt. No dummy humanoid VRM |
 | [mmd-pmx-to-vrm1](mmd-pmx-to-vrm1/SKILL.md) | Import PMX/PMD via mmd_tools; enable VRM1 humanoid + MMD expressions + MToon1; JP material/bone English glosses (**no `.vrm` export**) |

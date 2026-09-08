@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vmd-combine"
+version = "0.1.0"
+description = "Headless VMD merge (dance + facial overlay/concat). Stdlib, no Blender."
+readme = "SKILL.md"
+requires-python = ">=3.9"
+
+[project.urls]
+Homepage = "https://github.com/miramocha/blender-skills-and-rules"
+
+[project.scripts]
+combine-vmd = "vmd_combine.combine_vmd:main"
+
+[tool.setuptools]
+packages = ["vmd_combine"]
+
+[tool.setuptools.package-dir]
+vmd_combine = "tools"

@@ -103,5 +103,6 @@ Unmappable decorative morphs (`ω`, `はぁと`, …): reported skipped — hand
 
 - Renaming or removing ARKit / VRoid keys
 - Wiring into `run_full_pipeline()`
-- PMX/VMD export or mmd_tools bone setup
+- PMX export or mmd_tools bone setup
+- Combining `.vmd` files — use [vmd-combine](../vmd-combine/SKILL.md) (headless, no Blender)
 - Auto-sculpting morphs with no source geometry

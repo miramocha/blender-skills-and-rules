@@ -284,6 +284,35 @@ def _resolve_size(size: SizeArg, src: Any) -> tuple[int, int]:
     return w, h
 
 
+def _srgb_to_linear(c: float) -> float:
+    if c <= 0.04045:
+        return c / 12.92
+    return ((c + 0.055) / 1.055) ** 2.4
+
+
+def _parse_fill(fill: Any, default: tuple[float, float, float, float], *, srgb: bool) -> tuple[float, float, float, float]:
+    """Hex ``D8BCF5`` / ``#D8BCF5`` or ``(r,g,b[,a])``. Hex is sRGB; converted to linear when ``srgb``."""
+    if fill is None:
+        return default
+    if isinstance(fill, str):
+        h = fill.strip().lstrip("#")
+        if len(h) == 6:
+            rgb = [int(h[i : i + 2], 16) / 255.0 for i in (0, 2, 4)]
+            a = 1.0
+        elif len(h) == 8:
+            rgb = [int(h[i : i + 2], 16) / 255.0 for i in (0, 2, 4)]
+            a = int(h[6:8], 16) / 255.0
+        else:
+            raise ValueError(f"fill hex must be RRGGBB or RRGGBBAA, got {fill!r}")
+        if srgb:
+            rgb = [_srgb_to_linear(c) for c in rgb]
+        return (rgb[0], rgb[1], rgb[2], a)
+    if not isinstance(fill, (list, tuple)) or len(fill) not in (3, 4):
+        raise ValueError(f"fill must be hex str or (r,g,b[,a]), got {fill!r}")
+    rgba = [float(fill[0]), float(fill[1]), float(fill[2]), float(fill[3]) if len(fill) == 4 else 1.0]
+    return (rgba[0], rgba[1], rgba[2], rgba[3])
+
+
 def _fill_image(img: Any, rgba: tuple[float, float, float, float]) -> None:
     w, h = img.size
     n = int(w) * int(h)
@@ -597,6 +626,7 @@ def transfer_uv_texture(
     assign: bool = True,
     switch_render_uv: bool = False,
     materials: Optional[Sequence[str]] = None,
+    fill: Any = None,
     dry_run: bool = True,
 ) -> dict[str, Any]:
     """Bake ``image`` from ``source_uv`` onto ``dest_uv``.
@@ -675,6 +705,7 @@ def transfer_uv_texture(
         "assign": assign,
         "assign_materials": [m.name for m in assign_mats],
         "switch_render_uv": switch_render_uv,
+        "fill": fill,
         "rotation": rot,
         "other_mapped_images": other,
         "warnings": warnings,
@@ -716,26 +747,32 @@ def transfer_uv_texture(
         scene = bpy.context.scene
         scene.cycles.bake_type = "NORMAL" if resolved_kind == "normal" else "EMIT"
 
-        old_img = bpy.data.images.get(out_name)
-        if old_img:
-            bpy.data.images.remove(old_img)
-        tgt = bpy.data.images.new(
-            name=out_name,
-            width=width,
-            height=height,
-            alpha=True,
-            float_buffer=False,
-        )
+        # Keep dest datablock if it already exists (rebake). Removing it
+        # orphans VRM slots that already pointed at the previous bake.
+        tgt = bpy.data.images.get(out_name)
+        if tgt is None:
+            tgt = bpy.data.images.new(
+                name=out_name,
+                width=width,
+                height=height,
+                alpha=True,
+                float_buffer=False,
+            )
+        elif tuple(tgt.size) != (width, height):
+            tgt.scale(width, height)
         if resolved_kind == "normal":
-            fill = (0.5, 0.5, 1.0, 1.0)
+            default_fill = (0.5, 0.5, 1.0, 1.0)
             tgt.colorspace_settings.name = "Non-Color"
             tgt.alpha_mode = "CHANNEL_PACKED"
+            rgba = _parse_fill(fill, default_fill, srgb=False)
         else:
-            fill = (0.0, 0.0, 0.0, 1.0)
+            default_fill = (0.0, 0.0, 0.0, 1.0)
             tgt.colorspace_settings.name = src_img.colorspace_settings.name
-        tgt.generated_color = fill
+            rgba = _parse_fill(fill, default_fill, srgb=True)
+        use_clear = fill is None
+        tgt.generated_color = rgba
         tgt.generated_type = "BLANK"
-        _fill_image(tgt, fill)
+        _fill_image(tgt, rgba)
 
         bake_mat = _build_bake_material(
             kind=resolved_kind,
@@ -760,7 +797,7 @@ def transfer_uv_texture(
         bake = scene.render.bake
         bake.margin = margin
         bake.margin_type = "ADJACENT_FACES"
-        bake.use_clear = True
+        bake.use_clear = use_clear
         bake.use_selected_to_active = False
         bake.normal_space = "TANGENT"
         bake.target = "IMAGE_TEXTURES"
@@ -779,7 +816,7 @@ def transfer_uv_texture(
                 normal_space="TANGENT",
                 margin=margin,
                 margin_type="ADJACENT_FACES",
-                use_clear=True,
+                use_clear=use_clear,
                 use_selected_to_active=False,
                 target="IMAGE_TEXTURES",
                 save_mode="INTERNAL",

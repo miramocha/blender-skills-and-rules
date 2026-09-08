@@ -13,6 +13,7 @@ from mtoon_sidecar_schema import (
     portable_basename,
     rgb,
     rgba,
+    uv_anim_speeds,
     with_alpha,
     wrap_document,
 )
@@ -76,6 +77,13 @@ def _image_ref(tree, node_name: str) -> Optional[Dict[str, Any]]:
     return {"name": name}
 
 
+def _vrmc_mtoon(mat) -> Any:
+    try:
+        return mat.vrm_addon_extension.mtoon1.extensions.vrmc_materials_mtoon
+    except Exception:
+        return None
+
+
 def dump_material(mat) -> Optional[Dict[str, Any]]:
     if mat is None or not mat.use_nodes or mat.node_tree is None:
         return None
@@ -102,6 +110,12 @@ def dump_material(mat) -> Optional[Dict[str, Any]]:
         enabled = False
         ds = _sock(out, SOCK["doubleSided"])
         double_sided = bool(ds) if ds is not None else True
+    vrmc = _vrmc_mtoon(mat)
+    uv_anim = uv_anim_speeds(
+        getattr(vrmc, "uv_animation_scroll_x_speed_factor", None) if vrmc else None,
+        getattr(vrmc, "uv_animation_scroll_y_speed_factor", None) if vrmc else None,
+        getattr(vrmc, "uv_animation_rotation_speed_factor", None) if vrmc else None,
+    )
     return {
         "enabled": enabled,
         "alphaMode": alpha_mode,
@@ -123,18 +137,42 @@ def dump_material(mat) -> Optional[Dict[str, Any]]:
             "outlineWidthFactor": float(_sock(out, SOCK["outlineWidth"]) or 0.0),
             "outlineColorFactor": rgb(_sock(out, SOCK["outlineColor"])),
             "outlineLightingMixFactor": float(_sock(out, SOCK["outlineMix"]) or 1.0),
+            **uv_anim,
             "textures": textures,
         },
     }
 
 
-def dump_scene(*, only_in_use: bool = True, include_outline: bool = False) -> Dict[str, Any]:
+def visible_object_material_names() -> set:
+    """Material names on objects visible in the current view layer."""
+    names: set = set()
+    if bpy is None:
+        return names
+    view = bpy.context.view_layer
+    for obj in view.objects:
+        if not obj.visible_get():
+            continue
+        for slot in obj.material_slots:
+            if slot.material:
+                names.add(slot.material.name)
+    return names
+
+
+def dump_scene(
+    *,
+    only_in_use: bool = True,
+    include_outline: bool = False,
+    skip_hidden: bool = True,
+) -> Dict[str, Any]:
     if bpy is None:
         raise RuntimeError("bpy required")
+    allowed = visible_object_material_names() if skip_hidden else None
     materials: Dict[str, Any] = {}
     skipped: List[str] = []
     for mat in bpy.data.materials:
-        if only_in_use and not mat.users:
+        if skip_hidden and mat.name not in (allowed or ()):
+            continue
+        if only_in_use and not skip_hidden and not mat.users:
             continue
         if not include_outline and mat.name.startswith("MToon Outline"):
             continue
@@ -151,11 +189,13 @@ def dump_mtoon_sidecar(
     *,
     dry_run: bool = True,
     only_in_use: bool = True,
+    skip_hidden: bool = True,
 ) -> Dict[str, Any]:
-    doc = dump_scene(only_in_use=only_in_use)
+    doc = dump_scene(only_in_use=only_in_use, skip_hidden=skip_hidden)
     report: Dict[str, Any] = {
         "phase": "dump-mtoon-sidecar",
         "dry_run": dry_run,
+        "skip_hidden": skip_hidden,
         "out_path": os.path.abspath(out_path),
         "kind": KIND,
         "material_count": len(doc["materials"]),
@@ -201,6 +241,21 @@ def restore_material_from_entry(mat, entry: Dict[str, Any]) -> List[str]:
         (SOCK["gi"], mtoon.get("giEqualizationFactor")),
         (SOCK["matcapFactor"], with_alpha(mtoon.get("matcapFactor"))),
     ]
+    vrmc = _vrmc_mtoon(mat)
+    if vrmc is not None:
+        speeds = (
+            ("uv_animation_scroll_x_speed_factor", "uvAnimationScrollXSpeedFactor"),
+            ("uv_animation_scroll_y_speed_factor", "uvAnimationScrollYSpeedFactor"),
+            ("uv_animation_rotation_speed_factor", "uvAnimationRotationSpeedFactor"),
+        )
+        for attr, key in speeds:
+            if key not in mtoon:
+                continue
+            try:
+                setattr(vrmc, attr, float(mtoon[key] or 0.0))
+                changed.append(key)
+            except Exception:
+                continue
     from mtoon_sidecar_schema import OUTLINE_MODE_TO_INT
 
     mode = mtoon.get("outlineWidthMode")

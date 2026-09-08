@@ -15,6 +15,7 @@ from mtoon_sidecar_schema import (  # noqa: E402
     portable_basename,
     rgb,
     rgba,
+    uv_anim_speeds,
     wrap_document,
 )
 from export_gltf_prop import PACK_PREFIX  # noqa: E402
@@ -45,6 +46,18 @@ class TestSchema(unittest.TestCase):
 
     def test_pack_prefix(self) -> None:
         self.assertEqual(PACK_PREFIX, "MToonSidecarPack")
+
+
+    def test_uv_anim_speeds(self) -> None:
+        self.assertEqual(
+            uv_anim_speeds(0.5, None, "0.25"),
+            {
+                "uvAnimationScrollXSpeedFactor": 0.5,
+                "uvAnimationScrollYSpeedFactor": 0.0,
+                "uvAnimationRotationSpeedFactor": 0.25,
+            },
+        )
+        self.assertEqual(uv_anim_speeds()["uvAnimationScrollXSpeedFactor"], 0.0)
 
 
 if __name__ == "__main__":

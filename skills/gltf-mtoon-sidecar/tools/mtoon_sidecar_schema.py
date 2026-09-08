@@ -76,3 +76,21 @@ def wrap_document(materials: Dict[str, Any], *, blend: str = "") -> Dict[str, An
         "blend": portable_basename(blend),
         "materials": materials,
     }
+
+
+def uv_anim_speeds(
+    scroll_x: Any = None,
+    scroll_y: Any = None,
+    rotation: Any = None,
+) -> Dict[str, float]:
+    def factor(value: Any) -> float:
+        try:
+            return float(value or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    return {
+        "uvAnimationScrollXSpeedFactor": factor(scroll_x),
+        "uvAnimationScrollYSpeedFactor": factor(scroll_y),
+        "uvAnimationRotationSpeedFactor": factor(rotation),
+    }

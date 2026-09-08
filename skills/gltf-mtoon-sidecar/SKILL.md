@@ -17,7 +17,7 @@ glTF export **destroys** MToon (PBR leftover). Sidecar JSON is the look. `applyM
 
 ```
 - [ ] look — MToon authored in .blend (theme/classes via mtoon-material-sync)
-- [ ] dump-dry-run — dump_mtoon_sidecar(..., dry_run=True)
+- [ ] dump-dry-run — dump_mtoon_sidecar(..., dry_run=True) (skip_hidden default)
 - [ ] dump-write — dry_run=False → mtoon.json
 - [ ] export-dry-run — export_prop_gltf(..., dry_run=True)
 - [ ] export-write — GLB, animation_mode NLA_TRACKS (fallback ACTIONS)
@@ -28,10 +28,12 @@ glTF export **destroys** MToon (PBR leftover). Sidecar JSON is the look. `applyM
 
 - Dry-run dump/export first; write after approval
 - Skip `MToon Outline (*)` datablocks in the sidecar
+- Dump only materials on **visible** view-layer objects (`skip_hidden=True`). Hidden backups still `users` the same datablocks — visibility is the filter, not `mat.users` alone
 - Mute NLA stash so clips stay **separate** (`export_animation_mode='NLA_TRACKS'`)
 - Clear armature pose to rest before export. `export_force_sampling=True` bakes **every bone** into every clip (identity rest on unused bones). Layered three.js actions **replace** those tracks and freeze other clips. After export, keep only bones actually keyed on that Action (see reference). Do not treat GLB channel counts as the Action.
 - Export installs temp `MToonSidecarPack.*` planes so unused MToon maps (matcap) enter the GLB, then deletes them. `applyMtoonSidecar` **removes** leftover pack meshes after harvesting textures (hidden meshes still inflate `Box3`). Do not save the .blend with those objects.
-- `export_apply=True` — mesh modifiers (subdiv, etc.). Armature not applied; skins stay. Shape keys skipped if other modifiers exist.
+- `export_apply=True` — mesh modifiers (subdiv, Mirror, etc.). Armature not applied; skins stay. Shape keys skipped if other modifiers exist.
+- `use_visible=True` — Khronos default is **false**. Hidden viewport objects (`hide_get`, collection hide) otherwise ship and stack on the live mesh (double frame / backup arms). Pack dummy planes stay visible so maps still pack; `applyMtoonSidecar` strips them after harvest.
 - Enabling VRM MToon on a duplicate **wipes** RNA; dump JSON **before** enable, `restore_material_from_entry` after
 - MiraSite `parseVrmBytes` requires `userData.vrm` — **new loader path** for these GLBs
 
@@ -54,7 +56,7 @@ exp = export_prop_gltf(os.path.join(out_dir, "prop.glb"), dry_run=True)
 exp = export_prop_gltf(os.path.join(out_dir, "prop.glb"), dry_run=False)
 ```
 
-Default export packs MToon Image nodes via dummy planes (`pack_mtoon_images=True`). Sidecar still stores basenames only. Sibling PNGs only if pack is off.
+Default export packs MToon Image nodes via dummy planes (`pack_mtoon_images=True`). Sidecar still stores basenames only. Sibling PNGs only if pack is off. `export_prop_gltf` sets `use_visible=True`; do not turn that off to “get everything.”
 
 ## Three.js
 
