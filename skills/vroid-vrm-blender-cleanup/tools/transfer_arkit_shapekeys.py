@@ -1,5 +1,5 @@
 """
-Transfer ARKit shape keys onto a VRoid Face mesh (Beyond Expressions).
+Transfer ARKit shape keys onto a VRoid Face mesh (Beyond VTuber Tools or Beyond VRM Tools).
 
 Requires user-declared body type (male/female) and a ready Beyond addon.
 Phase C (reset shape keys) should only run after this phase is applied.
@@ -67,19 +67,25 @@ def beyond_expressions_ready() -> dict:
         "blend_file_exists": False,
     }
 
-    module_name = None
+    markers = ("beyond_vtuber", "beyond_vrm")
+    matches = []
     for mod in addon_utils.modules():
-        name = mod.__name__.lower()
-        if "beyond_vrm" in name or "beyond_vrm_extension" in name:
-            module_name = mod.__name__
-            break
+        low = mod.__name__.lower()
+        rank = next((index for index, marker in enumerate(markers) if marker in low), None)
+        if rank is None:
+            continue
+        enabled = 0 if addon_utils.check(mod.__name__)[1] else 1
+        matches.append((enabled, rank, mod.__name__))
+    matches.sort()
+    module_name = matches[0][2] if matches else None
 
     if module_name is None:
-        result["messages"].append("Beyond VRM Extension Suite not found.")
+        result["messages"].append("Beyond VTuber Tools or Beyond VRM Tools not found.")
         return result
 
     if not addon_utils.check(module_name)[1]:
-        result["messages"].append("Beyond VRM Extension Suite is not enabled.")
+        label = "Beyond VTuber Tools" if "beyond_vtuber" in module_name.lower() else "Beyond VRM Tools"
+        result["messages"].append(f"{label} is not enabled.")
         return result
 
     if not (hasattr(bpy.ops, "vrm") and hasattr(bpy.ops.vrm, "transfer_shapekeys")):

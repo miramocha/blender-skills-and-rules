@@ -354,7 +354,7 @@ Skip this follow-up if D already ran in the same session.
 
 **C:** Image datablocks, `img.filepath`, disk files under `//textures/`. Full tables: [reference.md](reference.md).
 
-**D:** Beyond VRM Extension Suite — `bpy.ops.vrm.transfer_shapekeys()` with `VROID_Female_Face` / `VROID_Male_Face`.
+**D:** Beyond VTuber Tools or Beyond VRM Tools — `bpy.ops.vrm.transfer_shapekeys()` with `VROID_Female_Face` / `VROID_Male_Face`.
 
 **E:** Zeros shape key **values** on Face — only after successful D.
 
@@ -374,7 +374,7 @@ Skip this follow-up if D already ran in the same session.
 |---------|-----|
 | `MCP server does not exist: blender` | Settings → MCP → restart `blender`; new chat |
 | `import_scene.vrm` missing | Enable VRM Add-on for Blender |
-| `transfer_shapekeys` missing | Enable Beyond VRM Extension Suite |
+| `transfer_shapekeys` missing | Enable Beyond VTuber Tools or Beyond VRM Tools |
 | Phase D skipped | User did not specify male/female, or Beyond addon not ready |
 | Phase E skipped | Phase D was not applied |
 | Phase G blocked | Run Phase A first — `J_Bip_*` bones still present |

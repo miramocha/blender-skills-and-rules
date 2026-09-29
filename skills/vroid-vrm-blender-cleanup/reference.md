@@ -211,7 +211,7 @@ Rename once; all materials keep pointing at the same image.
 
 | Item | Notes |
 |------|-------|
-| Add-on | Beyond VRM Extension Suite (`beyond_vrm_extension_suite`) |
+| Add-on | Beyond VTuber Tools (`beyond_vtuber_tools`) or Beyond VRM Tools (`beyond_vrm*`). Either one. Enabled VTuber Tools wins if both are on. |
 | Check | `beyond_expressions_ready()` — module enabled, operator exists, `Expression_Tools_Blender.blend` on disk |
 | User input | **Required:** `male` or `female` — do not auto-detect |
 | Scene property | `bpy.context.scene.vrm_shapekey_transfer_source` → `VROID_Female_Face` or `VROID_Male_Face` |
