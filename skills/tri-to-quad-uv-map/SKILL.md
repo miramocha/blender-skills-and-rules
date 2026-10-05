@@ -74,8 +74,10 @@ One profile per **material slot**, not per object. Run multiple profiles against
 | `hairback` | `Hair.Back` | `Body` (slot 1) / `HairBack` | ✓ |
 | `longboots` | `Shoes.Cloth` | `LongBoots` / shoe slot | ✓ |
 | `loafers` | `Shoes.Cloth` | `Loafers` / shoe slot | ✓ |
+| `longcoat` | `Hoodie_Cloth` | long-coat / `Tops` slot | ✓ |
+| `ribbontie` | `Tie_Cloth` | ribbon tie / `Tie` slot | ✓ |
 
-Clothing slots on `Body` (`Hoodie.Cloth`, …) are outfit-specific unless a profile/CSV exists (`longboots` / `loafers` for `Shoes.Cloth` — pick by shoe UV, do not share maps).
+Clothing slots on `Body` (`Hoodie_Cloth`, `Tie_Cloth`, …) are outfit-specific unless a profile/CSV exists (`longboots` / `loafers` for `Shoes_Cloth` — pick by shoe UV; `longcoat` for this long-coat `Hoodie_Cloth` UV; `ribbontie` for this `Tie_Cloth` UV). Do not share maps.
 
 ### Body: default vs socks (agent rule)
 

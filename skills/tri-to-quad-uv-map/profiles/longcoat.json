@@ -1,0 +1,14 @@
+{
+  "profile": "longcoat",
+  "label": "VRoid long coat / Hoodie_Cloth UV (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/longcoat-quad-dissolve.csv",
+  "material_token": "Hoodie_Cloth",
+  "notes": "Tops_01_CLOTH long-coat UV. Phase B names the slot Hoodie_Cloth. Source LongCoat.pre_t2q (4294 tris) → Body.002 (2054 quads + 186 tris). joins=2054. Not a general hoodie map.",
+  "reference": {
+    "source_object": "LongCoat.pre_t2q",
+    "result_object": "Body.002"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "profile": "ribbontie",
+  "label": "VRoid ribbon tie / Tie_Cloth UV (UVMap)",
+  "uv_layer": "UVMap",
+  "uv_precision": 4,
+  "co_precision": 6,
+  "map_file": "maps/ribbontie-quad-dissolve.csv",
+  "material_token": "Tie_Cloth",
+  "notes": "Ribbon tie UV. Phase B names the slot Tie_Cloth. Source RibbonTie.pre_t2q (488 tris) → Body.003 (238 quads + 12 tris). joins=238.",
+  "reference": {
+    "source_object": "RibbonTie.pre_t2q",
+    "result_object": "Body.003"
+  }
+}
