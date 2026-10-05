@@ -33,9 +33,11 @@ DEFAULT_J_BIP_TO_BONE: Dict[str, str] = {
     "J_Bip_L_Hand": "hand.l",
     "J_Bip_L_LowerArm": "lowerArm.l",
     "J_Bip_L_UpperArm": "upperArm.l",
+    "J_Bip_L_UpperLeg": "upperLeg.l",
     "J_Bip_R_Hand": "hand.r",
     "J_Bip_R_LowerArm": "lowerArm.r",
     "J_Bip_R_UpperArm": "upperArm.r",
+    "J_Bip_R_UpperLeg": "upperLeg.r",
 }
 
 
